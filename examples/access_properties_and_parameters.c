@@ -99,7 +99,7 @@ void update_attendees(icalcomponent* event)
 
 /* Here are some examples of manipulating properties */
 
-void test_properties()
+void test_properties(void)
 {
     icalproperty *prop;
     icalparameter *param;
@@ -115,7 +115,7 @@ void test_properties()
         icalparameter_new_cn("A Common Name 2"),
         icalparameter_new_cn("A Common Name 3"),
         icalparameter_new_cn("A Common Name 4"),
-        0);
+        (void *)0);
 
     /* Iterate through all of the parameters in the property */
     for(param = icalproperty_get_first_parameter(prop,ICAL_ANY_PARAMETER);

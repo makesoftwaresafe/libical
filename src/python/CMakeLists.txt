@@ -1,7 +1,7 @@
 include_directories(
-  ${CMAKE_SOURCE_DIR}/src
-  ${CMAKE_SOURCE_DIR}/src/libical
-  ${CMAKE_SOURCE_DIR}/src/libicalss
+  ${PROJECT_SOURCE_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src/libical
+  ${PROJECT_SOURCE_DIR}/src/libicalss
 )
 
 ########### next target ###############
@@ -21,4 +21,3 @@ set_target_properties(LibicalWrap PROPERTIES
 install(TARGETS LibicalWrap DESTINATION lib)
 
 ########### install files ###############
-

@@ -47,6 +47,8 @@
 #define MAXIMUM_ALLOWED_PARAMETERS 100
 #define MAXIMUM_ALLOWED_MULTIPLE_VALUES 500
 
+static enum icalparser_ctrl icalparser_ctrl_g = ICALPARSER_CTRL_KEEP;
+
 struct icalparser_impl
 {
     int buffer_full;    /* flag indicates that temp is smaller that
@@ -172,6 +174,11 @@ static char *parser_get_next_char(char c, char *str, int qm)
 /** Makes a new tmp buffer out of a substring. */
 static char *make_segment(char *start, char *end)
 {
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
     char *buf, *tmp;
     ptrdiff_t size = (ptrdiff_t)(end - start);
 
@@ -186,6 +193,9 @@ static char *make_segment(char *start, char *end)
     }
 
     return buf;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 }
 
 static char *parser_get_prop_name(char *line, char **end)
@@ -409,8 +419,8 @@ static char *parser_get_next_value(char *line, char **end, icalvalue_kind kind)
                 continue;
             }
         }
-        /* ignore all , for query value. select dtstart, dtend etc ... */
-        else if (kind == ICAL_QUERY_VALUE) {
+        /* ignore all commas for query and x values. select dtstart, dtend etc ... */
+        else if (kind == ICAL_QUERY_VALUE || kind == ICAL_X_VALUE) {
             if (next != 0) {
                 p = next + 1;
                 continue;
@@ -541,7 +551,7 @@ char *icalparser_get_line(icalparser *parser,
             if (parser->temp[0] == '\0') {
 
                 if (line[0] != '\0') {
-                    /* There is data in the output, so fall trhough and process it */
+                    /* There is data in the output, so fall through and process it */
                     break;
                 } else {
                     /* No data in output; return and signal that there
@@ -604,7 +614,7 @@ static void insert_error(icalcomponent *comp, const char *text,
 
     icalcomponent_add_property(
         comp,
-        icalproperty_vanew_xlicerror(temp, icalparameter_new_xlicerrortype(type), 0));
+        icalproperty_vanew_xlicerror(temp, icalparameter_new_xlicerrortype(type), (void *)0));
 }
 
 static int line_is_blank(char *line)
@@ -702,6 +712,47 @@ icalcomponent *icalparser_add_line(icalparser *parser, char *line)
 
     if (line_is_blank(line) == 1) {
         return 0;
+    }
+
+    if (icalparser_ctrl_g != ICALPARSER_CTRL_KEEP) {
+        static const unsigned char is_icalctrl[256] = {
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        };
+
+        char *c, *d;
+        for (c = d = line; *c; c++) {
+            if (!is_icalctrl[(unsigned char)*c]) {
+                *d++ = *c;
+            } else if (icalparser_ctrl_g == ICALPARSER_CTRL_OMIT) {
+                // omit CTRL character
+            } else {
+                icalcomponent *tail = pvl_data(pvl_tail(parser->components));
+                if (tail) {
+                    insert_error(
+                            tail, line,
+                            "Content line contains invalid CONTROL characters",
+                            ICAL_XLICERRORTYPE_COMPONENTPARSEERROR);
+                }
+                parser->state = ICALPARSER_ERROR;
+                return 0;
+            }
+        }
+        *d = '\0';
     }
 
     /* Begin by getting the property name at the start of the line. The
@@ -1320,7 +1371,15 @@ char *icalparser_string_line_generator(char *out, size_t buf_size, void *d)
         size = buf_size - 1;
     }
 
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
     strncpy(out, data->pos, size);
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
     if(replace_cr) {
         *(out + size - 1) = '\n';
@@ -1355,4 +1414,14 @@ icalcomponent *icalparser_parse_string(const char *str)
     icalparser_free(p);
 
     return c;
+}
+
+enum icalparser_ctrl icalparser_get_ctrl(void)
+{
+    return icalparser_ctrl_g;
+}
+
+void icalparser_set_ctrl(enum icalparser_ctrl ctrl)
+{
+    icalparser_ctrl_g = ctrl;
 }

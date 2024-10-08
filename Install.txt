@@ -87,13 +87,28 @@ Homebrew:
   catalog files can be found so the gtk entities are located, like so:
     export XML_CATALOG_FILES=/usr/local/etc/xml/catalog
 
+== Building for Android ==
+
+% mkdir build
+% cd build
+$ export ANDROID_NDK=/path/to/android-ndk
+% cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+        -DCMAKE_INSTALL_PREFIX=/install/path .. \
+        -DANDROID_ABI=[x86,x86_64,armeabi-v7a,arm64-v8a,...]
+        #see https://developer.android.com/ndk/guides/cmake for more options
+% make
+% make install
+
+For more information about building CMake projects on Android see
+https://developer.android.com/ndk/guides/cmake
+
 == Optional Dependencies ==
 * libicu "International Components for Unicode" development libraries.
   Highly recommended for RSCALE support.
   libicu can be found at http://www.icu-project.org
 
   If CMake doesn't locate your libicu installation try setting the
-  ICU_ROOT or ICU_BASE environment variable to the top folder where
+  ICU_ROOT or ICU_BASE environment variables to the top folder where
   libicu is installed and run cmake again.
 
 * Berkeley DB storage.
@@ -109,6 +124,13 @@ Homebrew:
   need to have the GObject Introspection development package v0.6.7 or higher
   installed beforehand.
 
+  Requires the GObject Introspection development package:
+    Ubuntu: apt-get install gobject-introspection
+    Fedora: dnf install gobject-introspection
+    Mac: brew install gobject-introspection pygobject3
+    Windows: vcpkg install gobject-introspection (untested)
+    (see https://vcpkg.io/en/docs/users/buildsystems/cmake-integration.html)
+
 You can also force CMake to ignore any of the optional dependencies
 by passing the option -DCMAKE_DISABLE_FIND_PACKAGE_<PACKAGE>=True.
 For instance:
@@ -120,6 +142,14 @@ This C library can be built with bindings for these other languages:
 * C++. If a C++ compiler is found the buildsystem will create and install the C++ bindings API.
   Turn this off by passing -DWITH_CXX_BINDINGS=False option to CMake.
   Don't mix ABI from C and C++ compilers.
+
+* Python bindings are built using gobject-introspection, which is enabled
+  by passing -DGOBJECT_INTROSPECTION=True to CMake.
+
+  Requires the GObject Introspection development package (see above).
+
+  Don't forget to set (or append to, as needed) the GI_TYPELIB_PATH environment
+  variable to $PREFIX/lib/girepository-1.0 (or $PREFIX/lib64/girepository-1.0).
 
 * There are Java, Perl, PHP and Python bindings but they are old and haven't
   been tested in a very long time.  Volunteers wanted.
@@ -154,3 +184,21 @@ for example: cmake -DCMAKE_INSTALL_PREFIX=/opt -DCMAKE_INSTALL_LIBDIR=/opt/lib32
 Run 'make docs' to build the API documentation and reference.
 Disable the docs make target by running CMake with -DICAL_BUILD_DOCS=False option.
 Disable the libical-glib developer documentation by running CMake with -DENABLE_GTK_DOC=False.
+
+== Using vcpkg to install dependencies ==
+If you want to use vcpkg (in $VCPKG_ROOT) to build the dependencies as part
+of the project you can also tell CMake the vcpkg toolchain file with:
+"-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+for example: if you have vcpkg installed in $HOME/vcpkg, then run
+cmake -DCMAKE_TOOLCHAIN_FILE=$HOME/vcpkg/scripts/buildsystems/vcpkg.cmake ..
+
+Windows note:
+MSVC comes with vcpkg pre-installed and sets %VCPKG_ROOT% for you.
+However, the only way to update that vcpkg version is by upgrading
+MSVC itself; which may not be what you want and may be too old.
+Consider installing your own vcpkg instead of relying on the MSVC vcpkg.
+
+Non-Windows note:
+You'll need to pre-install autoconf, automake and autoconf-archive for icu.
+See %VCPKG_ROOT%/p rts/icu/portfile.cmake for more info.

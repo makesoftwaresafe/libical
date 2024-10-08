@@ -115,8 +115,8 @@ static icalcomponent *icalmessage_new_reply_base(icalcomponent *c,
             icalcomponent_vanew(
                 ICAL_VEVENT_COMPONENT,
                 icalproperty_new_dtstamp(icaltime_from_timet_with_zone(time(0), 0, NULL)),
-                0),
-            0);
+                (void *)0),
+            (void *)0);
 
     icalcomponent *inner = icalmessage_get_inner(reply);
 
@@ -272,7 +272,7 @@ icalcomponent *icalmessage_new_delegate_request(icalcomponent *c,
     delegateeParam = icalparameter_new_delegatedfrom(icalproperty_get_attendee(attendee));
     icalcomponent_add_property(
         inner,
-        icalproperty_vanew_attendee(delegatee, delegateeParam, 0));
+        icalproperty_vanew_attendee(delegatee, delegateeParam, (void *)0));
     icalparameter_free(delegateeParam);
     return reply;
 }

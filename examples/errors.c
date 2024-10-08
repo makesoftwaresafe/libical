@@ -2,22 +2,20 @@
 
 #include <libical/ical.h>
 
-void program_errors()
+void program_errors(void)
 {
     /*Most routines will set icalerrno on errors. This is an
       enumeration defined in icalerror.h */
 
     icalerror_clear_errno();
 
-    (void)icalcomponent_new(ICAL_VEVENT_COMPONENT);
+    icalcomponent *comp = icalcomponent_new(ICAL_VEVENT_COMPONENT);
 
     if (icalerrno != ICAL_NO_ERROR){
-
         fprintf(stderr,"Horrible libical error: %s\n",
                 icalerror_strerror(icalerrno));
-
     }
-
+    icalcomponent_free(comp);
 }
 
 void component_errors(icalcomponent *comp)

@@ -52,6 +52,8 @@ LIBICAL_ICAL_EXPORT icalcomponent *icalcomponent_new_clone(icalcomponent *compon
 LIBICAL_ICAL_EXPORT icalcomponent *icalcomponent_new_from_string(const char *str);
 
 /** @brief Constructor
+ *
+ * Make sure to pass NULL (not 0) as the final argument!
  */
 LIBICAL_ICAL_EXPORT icalcomponent *icalcomponent_vanew(icalcomponent_kind kind, ...);
 
@@ -449,8 +451,8 @@ LIBICAL_ICAL_EXPORT int icalproperty_recurrence_is_excluded(icalcomponent *comp,
  *
  * It will filter out events that are specified as an EXDATE or an EXRULE.
  *
- * @todo We do not filter out duplicate RRULES/RDATES
- * @todo We do not handle RDATEs with explicit periods
+ * TODO: We do not filter out duplicate RRULES/RDATES
+ * TODO: We do not handle RDATEs with explicit periods
  */
 LIBICAL_ICAL_EXPORT void icalcomponent_foreach_recurrence(icalcomponent *comp,
                                                           struct icaltimetype start,

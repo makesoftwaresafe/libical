@@ -1125,7 +1125,7 @@ icalarray *icalrecurrencetype_rscale_supported_calendars(void)
 
     calendars = icalarray_new(sizeof(const char **), 20);
 
-    en = ucal_getKeywordValuesForLocale("calendar", NULL, false, &status);
+    en = ucal_getKeywordValuesForLocale("calendar", "", false, &status);
     while ((cal = uenum_next(en, NULL, &status))) {
         cal = icalmemory_tmp_copy(cal);
         icalarray_append(calendars, &cal);
@@ -1526,7 +1526,7 @@ static int initialize_rscale(icalrecur_iterator *impl)
         }
 
         /* Check if specified calendar is supported */
-        en = ucal_getKeywordValuesForLocale("calendar", NULL, false, &status);
+        en = ucal_getKeywordValuesForLocale("calendar", "", false, &status);
         while ((cal = uenum_next(en, NULL, &status))) {
             if (!strcmp(cal, rule.rscale)) {
                 is_hebrew = !strcmp(rule.rscale, "hebrew");
@@ -2729,6 +2729,7 @@ static int expand_year_days(icalrecur_iterator *impl, int year)
                 }
 
                 /* Set start and end of ISO week-numbering year */
+                set_day_of_year(impl, 1);
                 doy_offset += get_start_of_week(impl) - 1;
                 last_day = (7 * weeks_in_year(year)) - doy_offset - 1;
 

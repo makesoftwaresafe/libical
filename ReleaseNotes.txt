@@ -1,9 +1,46 @@
 Release Highlights
 ==================
 
-Version 3.0.15 (UNRELEASED):
+Version 3.0.19 (UNRELEASED):
 ----------------------------
+ * Fix for changes to the libicu 75 API
+ * Add vcpkg manifest-mode support
+
+Version 3.0.18 (31 March 2024):
+-------------------------------
+ * Requires CMake v3.5.0 or higher
+ * Escape ^ (U+005E) character in parameter values according to RFC 6868
+ * New CMake option LIBICAL_BUILD_EXAMPLES to disable building the examples
+ * Should be able to use the project as a submodule
+ * Built-in timezones updated to tzdata2024a
+
+Version 3.0.17 (14 October 2023):
+---------------------------------
+ * Improved Android support
+ * Escape commas in x-property TEXT values
+ * Built-in timezones updated to tzdata2023c
+ * icalparser_ctrl setting defines how to handle invalid CONTROL characters during parsing
+ * New publicly available functions:
+     + get_zone_directory()
+     + icalparser_get_ctrl
+     + icalparser_set_ctrl
+
+Version 3.0.16 (17 October 2022):
+---------------------------------
+ * Fix regressions in 3.0.15 due to improperly tested fuzz fixes
+ * Fix argument guards in icaltime_as_timet to match documentation and tests
+
+Version 3.0.15 (06 October 2022):
+---------------------------------
  * Add missing property parameters into libical-glib
+ * Fix CMake option USE_32BIT_TIME_T actually uses a 32-bit time_t value
+ * Fix icaltime_as_timet, which returned incorrect results for years >= 2100,
+   to work properly between years 1902 and 10k.
+ * Fix x-property comma handling and escaping
+ * Built-in timezones updated to tzdata2022d (now with a VTIMEZONE for each time zone alias)
+ * Fix a fuzzer issue
+ * Handle unreachable-code compile warnings with clang
+ * Ensure all vanew_foo() calls finish with (void*)0 (not 0)
 
 Version 3.0.14 (05 February 2022):
 ----------------------------------

@@ -111,6 +111,7 @@ static time_t icaltime_timegm(const struct tm *tm)
 static time_t make_time(struct tm *tm, int tzm)
 {
     time_t tim;
+    int febs;
 
     static int days[] = { -1, 30, 58, 89, 119, 150, 180, 211, 242, 272, 303, 333, 364 };
 
@@ -119,10 +120,13 @@ static time_t make_time(struct tm *tm, int tzm)
     if (tm->tm_mon < 0 || tm->tm_mon > 11)
         return ((time_t) - 1);
 
+    if (tm->tm_year < 2)
+        return ((time_t)-1);
+
 #if (SIZEOF_TIME_T == 4)
     /* check that year specification within range */
 
-    if (tm->tm_year < 70 || tm->tm_year > 138)
+    if (tm->tm_year > 138)
         return ((time_t) - 1);
 
     /* check for upper bound of Jan 17, 2038 (to avoid possibility of
@@ -135,6 +139,11 @@ static time_t make_time(struct tm *tm, int tzm)
             return ((time_t) - 1);
         }
     }
+#else
+    /* We don't support years >= 10000, because the function has not been tested at this range. */
+    if (tm->tm_year >= 8100) {
+        return ((time_t)-1);
+    }
 #endif /* SIZEOF_TIME_T */
 
     /*
@@ -145,12 +154,17 @@ static time_t make_time(struct tm *tm, int tzm)
 
     tim = (time_t) ((tm->tm_year - 70) * 365 + ((tm->tm_year - 1) / 4) - 17);
 
+    /* adjust: no leap days every 100 years, except every 400 years. */
+
+    febs = (tm->tm_year - 100) - ((tm->tm_mon <= 1) ? 1 : 0);
+    tim -= febs / 100;
+    tim += febs / 400;
+
     /* add number of days elapsed in the current year */
 
     tim += days[tm->tm_mon];
 
-    /* check and adjust for leap years (the leap year check only valid
-       during the 32-bit era */
+    /* check and adjust for leap years */
 
     if ((tm->tm_year & 3) == 0 && tm->tm_mon > 1)
         tim += 1;
@@ -190,6 +204,7 @@ struct icaltimetype icaltime_from_timet_with_zone(const time_t tm, const int is_
     utc_zone = icaltimezone_get_utc_timezone();
 
     /* Convert the time_t to a struct tm in UTC time. We can trust gmtime for this. */
+    memset(&t, 0, sizeof(struct tm));
     if (!gmtime_r(&tm, &t))
         return is_date ? icaltime_null_date () : icaltime_null_time ();
 
@@ -268,8 +283,8 @@ time_t icaltime_as_timet_with_zone(const struct icaltimetype tt, const icaltimez
 
     utc_zone = icaltimezone_get_utc_timezone();
 
-    /* If the time is the special null time, return 0. */
-    if (icaltime_is_null_time(tt)) {
+    /* Return 0 if the time is the special null time or a bad time */
+    if (icaltime_is_null_time(tt) || !icaltime_is_valid_time(tt)) {
         return 0;
     }
 
@@ -434,7 +449,7 @@ static const int _days_in_month[] = { 0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31,
 
 int icaltime_days_in_month(const int month, const int year)
 {
-    int days = _days_in_month[month];
+    int days;
 
 /* The old code aborting if it was passed a parameter like BYMONTH=0
  * Unfortunately it's not practical right now to pass an error all
@@ -447,6 +462,8 @@ int icaltime_days_in_month(const int month, const int year)
     if ((month < 1) || (month > 12)) {
         return 30;
     }
+
+    days = _days_in_month[month];
 
     if (month == 2) {
         days += icaltime_is_leap_year(year);
