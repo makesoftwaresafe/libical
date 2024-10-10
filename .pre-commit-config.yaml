@@ -12,17 +12,21 @@ repos:
   - id: end-of-file-fixer
   - id: check-added-large-files
   - id: check-case-conflict
+  - id: check-xml
   - id: check-yaml
     args: [--allow-multiple-documents]
     exclude: ^(.clang-tidy)
   - id: check-json
+  - id: check-symlinks
+  - id: destroyed-symlinks
+  - id: check-executables-have-shebangs
 - repo: https://github.com/pre-commit/mirrors-clang-format
-  rev: v18.1.8
+  rev: v19.1.0
   hooks:
   - id: clang-format
     exclude: ^(src/java/|src/Net-ICal-Libical|src/libical/astime.h|src/libical/caldate.c|src/libicalvcal/port.h|src/libicalvcal/vcaltmp|src/libicalvcal/vcc|src/libicalvcal/vobject)
 - repo: https://github.com/PyCQA/pylint
-  rev: v3.2.4
+  rev: v3.3.1
   hooks:
   - id: pylint
     exclude: ^(.cmake-format.py)
@@ -42,15 +46,21 @@ repos:
     exclude: (cmake/Toolchain-|.h.cmake|/Doxyfile.cmake)
   - id: cmake-format
     exclude: (cmake/Toolchain-|.h.cmake|/Doxyfile.cmake)
-- repo: https://github.com/markdownlint/markdownlint
+- repo: https://github.com/DavidAnson/markdownlint-cli2
   rev: v0.12.0
   hooks:
-  - id: markdownlint
-    entry: mdl
-    language: ruby
+  - id: markdownlint-cli2
     files: \.(md|mdown|markdown)$
+- repo: https://github.com/scop/pre-commit-shfmt
+  rev: v3.8.0-1
+  hooks:
+  - id: shfmt
+- repo: https://github.com/shellcheck-py/shellcheck-py
+  rev: v0.9.0.6
+  hooks:
+  - id: shellcheck
 - repo: https://github.com/fsfe/reuse-tool
-  rev: v3.1.0a1
+  rev: v4.0.3
   hooks:
   - id: reuse
     args: [--suppress-deprecation]

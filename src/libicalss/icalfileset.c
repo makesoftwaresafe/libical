@@ -300,42 +300,41 @@ int icalfileset_unlock(icalfileset *set)
 #endif
 }
 
-#if !defined(_WIN32)
-static char *shell_quote(const char *s)
+/* Lifted from https://stackoverflow.com/questions/29079011/copy-file-function-in-c */
+static int file_copy(char fileSource[], char fileDestination[])
 {
-    char *result;
-    char *p;
+    char c[1024]; // or any other constant you like
+    FILE *stream_R, *stream_W;
 
-    p = result = malloc(strlen(s) * 5 + 1);
-    while (*s) {
-        if (*s == '\'') {
-            *p++ = '\'';
-            *p++ = '"';
-            *p++ = *s++;
-            *p++ = '"';
-            *p++ = '\'';
-        } else {
-            *p++ = *s++;
+    if ((stream_R = fopen(fileSource, "r")) == (FILE *)NULL) {
+        return -1;
+    }
+    if ((stream_W = fopen(fileDestination, "w")) == (FILE *)NULL) {
+        fclose(stream_R);
+        return -1;
+    }
+
+    while (!feof(stream_R)) {
+        size_t bytes = fread(c, 1, sizeof(c), stream_R);
+        if (bytes) {
+            (void)fwrite(c, 1, bytes, stream_W);
         }
     }
-    *p = '\0';
-    return result;
-}
 
-#endif
+    //close streams
+    fclose(stream_R);
+    fclose(stream_W);
+
+    return 0;
+}
 
 icalerrorenum icalfileset_commit(icalset *set)
 {
-    char tmp[MAXPATHLEN];
+    char backupFile[MAXPATHLEN];
     char *str;
     icalcomponent *c;
     size_t write_size = 0;
     icalfileset *fset = (icalfileset *)set;
-
-#if defined(_WIN32_WCE)
-    wchar_t *wtmp = 0;
-    PROCESS_INFORMATION pi;
-#endif
 
     icalerror_check_arg_re((fset != 0), "set", ICAL_BADARG_ERROR);
 
@@ -346,30 +345,13 @@ icalerrorenum icalfileset_commit(icalset *set)
     }
 
     if (fset->options.safe_saves == 1) {
-#if !defined(_WIN32)
-        char *quoted_file = shell_quote(fset->path);
-
-        snprintf(tmp, MAXPATHLEN, "cp '%s' '%s.bak'", fset->path, fset->path);
-        free(quoted_file);
-#else
-        snprintf(tmp, MAXPATHLEN, "copy %s %s.bak", fset->path, fset->path);
-#endif
-
-#if !defined(_WIN32_WCE)
-        if (system(tmp) < 0) {
-#else
-
-        wtmp = wce_mbtowc(tmp);
-
-        if (CreateProcess(wtmp, L"", NULL, NULL, FALSE, 0, NULL, NULL, NULL, &pi)) {
-#endif
+        strncpy(backupFile, fset->path, MAXPATHLEN - 4);
+        strncat(backupFile, ".bak", MAXPATHLEN - 1);
+        if (file_copy(fset->path, backupFile) != 0) {
             icalerror_set_errno(ICAL_FILE_ERROR);
             return ICAL_FILE_ERROR;
         }
     }
-#if defined(_WIN32_WCE)
-    free(wtmp);
-#endif
 
     if (lseek(fset->fd, 0, SEEK_SET) < 0) {
         icalerror_set_errno(ICAL_FILE_ERROR);
@@ -750,7 +732,7 @@ icalsetiter icalfileset_begin_component(icalset *set, icalcomponent_kind kind, i
     icalfileset *fset;
     struct icaltimetype start, next;
     icalproperty *dtstart, *rrule, *prop, *due;
-    struct icalrecurrencetype recur;
+    struct icalrecurrencetype *recur;
     int g = 0;
 
     _unused(tzid);
@@ -773,10 +755,10 @@ icalsetiter icalfileset_begin_component(icalset *set, icalcomponent_kind kind, i
         /* check if it is a recurring component and with gauge expand, if so
            we need to add recurrence-id property to the given component */
         rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+        recur = rrule ? icalproperty_get_rrule(rrule) : NULL;
         g = icalgauge_get_expand(gauge);
 
-        if (rrule != 0 && g == 1) {
-            recur = icalproperty_get_rrule(rrule);
+        if (recur != 0 && g == 1) {
             if (icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
                 dtstart = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
                 if (dtstart) {
@@ -834,7 +816,7 @@ icalcomponent *icalfileset_form_a_matched_recurrence_component(icalsetiter *itr)
     icalcomponent *comp = NULL;
     struct icaltimetype start, next;
     icalproperty *dtstart, *rrule, *prop, *due;
-    struct icalrecurrencetype recur;
+    struct icalrecurrencetype *recur;
 
     start = icaltime_from_timet_with_zone(time(0), 0, NULL);
     comp = itr->last_component;
@@ -844,8 +826,11 @@ icalcomponent *icalfileset_form_a_matched_recurrence_component(icalsetiter *itr)
     }
 
     rrule = icalcomponent_get_first_property(comp, ICAL_RRULE_PROPERTY);
+    recur = rrule ? icalproperty_get_rrule(rrule) : NULL;
 
-    recur = icalproperty_get_rrule(rrule);
+    if (recur == NULL) {
+        return NULL;
+    }
 
     if (icalcomponent_isa(comp) == ICAL_VEVENT_COMPONENT) {
         dtstart = icalcomponent_get_first_property(comp, ICAL_DTSTART_PROPERTY);
@@ -897,7 +882,7 @@ icalcomponent *icalfilesetiter_to_next(icalset *set, icalsetiter *i)
     icalcomponent *c = NULL;
     struct icaltimetype start, next;
     icalproperty *dtstart, *rrule, *prop, *due;
-    struct icalrecurrencetype recur;
+    struct icalrecurrencetype *recur;
     int g = 0;
 
     _unused(set);
@@ -916,12 +901,11 @@ icalcomponent *icalfilesetiter_to_next(icalset *set, icalsetiter *i)
         }
 
         rrule = icalcomponent_get_first_property(c, ICAL_RRULE_PROPERTY);
+        recur = rrule ? icalproperty_get_rrule(rrule) : NULL;
         g = icalgauge_get_expand(i->gauge);
 
         /* a recurring component with expand query */
-        if (rrule != 0 && g == 1) {
-            recur = icalproperty_get_rrule(rrule);
-
+        if (recur != 0 && g == 1) {
             if (icalcomponent_isa(c) == ICAL_VEVENT_COMPONENT) {
                 dtstart = icalcomponent_get_first_property(c, ICAL_DTSTART_PROPERTY);
                 if (dtstart) {

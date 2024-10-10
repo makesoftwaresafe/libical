@@ -110,23 +110,23 @@ static void byebye(int code, struct options_struct *opt)
 
 static char *lowercase(const char *str)
 {
-    char *new;
+    char *lower;
     char *p = 0;
 
     if (!str)
         return NULL;
 
-    new = strdup(str);
+    lower = strdup(str);
 
-    if (!new) {
+    if (!lower) {
         return NULL;
     }
 
-    for (p = new; *p != 0; p++) {
+    for (p = lower; *p != 0; p++) {
         *p = tolower((int)*p);
     }
 
-    return new;
+    return lower;
 }
 
 icalcomponent *get_first_real_component(icalcomponent *comp)
@@ -590,7 +590,7 @@ void get_options(int argc, char *argv[], struct options_struct *opt)
         }
 
         /* Find password entry for user */
-        while ((pw = getpwent()) != 0) { /* cppcheck-suppress getpwentCalled */
+        while ((pw = getpwent()) != 0) {
             if (strcmp(user, pw->pw_name) == 0) {
                 break;
             }

@@ -873,6 +873,10 @@ static const char *rrule_parse_weekly_days(const char *s,
     if (*error_message)
         return NULL;
 
+    if (!icalrecur_resize_by(&recur->by[ICAL_BY_DAY], ICAL_BY_DAY_SIZE)) {
+        return NULL;
+    }
+
     for (i = 0; i < ICAL_BY_DAY_SIZE; i++) {
         const char *e = s;
         int found_day, day;
@@ -893,7 +897,7 @@ static const char *rrule_parse_weekly_days(const char *s,
             break;
 
         /* cppcheck-suppress arrayIndexOutOfBounds; since 'day' can't be >6 */
-        recur->by_day[i] = weekday_codes[day];
+        recur->by[ICAL_BY_DAY].data[i] = weekday_codes[day];
 
         s = e;
         /* Skip any whitespace. */
@@ -901,9 +905,9 @@ static const char *rrule_parse_weekly_days(const char *s,
             s++;
     }
 
-    /* Terminate the array, if it isn't full. */
-    if (i < ICAL_BY_DAY_SIZE)
-        recur->by_day[i] = ICAL_RECURRENCE_ARRAY_MAX;
+    if (!icalrecur_resize_by(&recur->by[ICAL_BY_DAY], i)) {
+        return NULL;
+    }
 
     return s;
 }
@@ -917,6 +921,10 @@ static const char *rrule_parse_monthly_days(const char *s,
     /* If we've already found an error, just return. */
     if (*error_message)
         return NULL;
+
+    if (!icalrecur_resize_by(&recur->by[ICAL_BY_MONTH_DAY], ICAL_BY_MONTHDAY_SIZE)) {
+        return NULL;
+    }
 
     for (i = 0; i < ICAL_BY_MONTHDAY_SIZE; i++) {
         const char *e;
@@ -945,7 +953,7 @@ static const char *rrule_parse_monthly_days(const char *s,
         if (*e != ' ' && *e != '\t' && *e != '\0')
             break;
 
-        recur->by_month_day[i] = month_day;
+        recur->by[ICAL_BY_MONTH_DAY].data[i] = month_day;
 
         s = e;
         /* Skip any whitespace. */
@@ -953,11 +961,23 @@ static const char *rrule_parse_monthly_days(const char *s,
             s++;
     }
 
-    /* Terminate the array, if it isn't full. */
-    if (i < ICAL_BY_MONTHDAY_SIZE)
-        recur->by_month_day[i] = ICAL_RECURRENCE_ARRAY_MAX;
+    if (!icalrecur_resize_by(&recur->by[ICAL_BY_MONTH_DAY], i)) {
+        return NULL;
+    }
 
     return s;
+}
+
+static int icalrecur_set_single_by(icalrecurrence_by_data *by, short value)
+{
+    if (!icalrecur_resize_by(by, 1)) {
+        return 0;
+    }
+
+    by->data[0] = value;
+    by->size = 1;
+
+    return 1;
 }
 
 static const char *rrule_parse_monthly_positions(const char *s,
@@ -1033,7 +1053,7 @@ static const char *rrule_parse_monthly_positions(const char *s,
             s++;
     }
 
-    /* Now merge them together into the recur->by_day array. If there is a
+    /* Now merge them together into the recur->by[ICAL_BY_DAY] array. If there is a
        single position & weekday we output something like
        'BYDAY=TU;BYSETPOS=2', so Outlook will understand it. */
     num_weekdays = 0;
@@ -1044,11 +1064,13 @@ static const char *rrule_parse_monthly_positions(const char *s,
         }
     }
     if (num_positions == 1 && num_weekdays == 1) {
-        recur->by_day[0] = weekday_codes[only_weekday];
-        recur->by_day[1] = ICAL_RECURRENCE_ARRAY_MAX;
+        if (!icalrecur_set_single_by(&recur->by[ICAL_BY_DAY], weekday_codes[only_weekday])) {
+            return NULL;
+        }
 
-        recur->by_set_pos[0] = occurrences[0];
-        recur->by_set_pos[1] = ICAL_RECURRENCE_ARRAY_MAX;
+        if (!icalrecur_set_single_by(&recur->by[ICAL_BY_SET_POS], occurrences[0])) {
+            return NULL;
+        }
     } else {
         elems = 0;
         for (i = 0; i < num_positions; i++) {
@@ -1056,11 +1078,15 @@ static const char *rrule_parse_monthly_positions(const char *s,
 
             for (day = 0; day < 7; day++) {
                 if (found_weekdays[day]) {
-                    recur->by_day[elems] =
+                    if (!icalrecur_resize_by(&recur->by[ICAL_BY_DAY], elems + 1)) {
+                        return NULL;
+                    }
+
+                    recur->by[ICAL_BY_DAY].data[elems] =
                         (abs(month_position) * 8 +
                          weekday_codes[day]) *
                         ((month_position < 0) ? -1 : 1);
-                    elems++;
+
                     if (elems == ICAL_BY_DAY_SIZE)
                         break;
                 }
@@ -1069,10 +1095,6 @@ static const char *rrule_parse_monthly_positions(const char *s,
             if (elems == ICAL_BY_DAY_SIZE)
                 break;
         }
-
-        /* Terminate the array, if it isn't full. */
-        if (elems < ICAL_BY_DAY_SIZE)
-            recur->by_day[elems] = ICAL_RECURRENCE_ARRAY_MAX;
     }
 
     return s;
@@ -1088,6 +1110,10 @@ static const char *rrule_parse_yearly_months(const char *s,
     if (*error_message)
         return NULL;
 
+    if (!icalrecur_resize_by(&recur->by[ICAL_BY_MONTH], ICAL_BY_MONTH_SIZE)) {
+        return NULL;
+    }
+
     for (i = 0; i < ICAL_BY_MONTH_SIZE; i++) {
         const char *e;
         int month;
@@ -1102,7 +1128,7 @@ static const char *rrule_parse_yearly_months(const char *s,
         if (*e != ' ' && *e != '\t' && *e != '\0')
             break;
 
-        recur->by_month[i] = month;
+        recur->by[ICAL_BY_MONTH].data[i] = month;
 
         s = e;
         /* Skip any whitespace. */
@@ -1110,9 +1136,9 @@ static const char *rrule_parse_yearly_months(const char *s,
             s++;
     }
 
-    /* Terminate the array, if it isn't full. */
-    if (i < ICAL_BY_MONTH_SIZE)
-        recur->by_month[i] = ICAL_RECURRENCE_ARRAY_MAX;
+    if (!icalrecur_resize_by(&recur->by[ICAL_BY_MONTH], i)) {
+        return NULL;
+    }
 
     return s;
 }
@@ -1126,6 +1152,10 @@ static const char *rrule_parse_yearly_days(const char *s,
     /* If we've already found an error, just return. */
     if (*error_message)
         return NULL;
+
+    if (!icalrecur_resize_by(&recur->by[ICAL_BY_YEAR_DAY], ICAL_BY_YEARDAY_SIZE)) {
+        return NULL;
+    }
 
     for (i = 0; i < ICAL_BY_YEARDAY_SIZE; i++) {
         char *e;
@@ -1141,7 +1171,7 @@ static const char *rrule_parse_yearly_days(const char *s,
         if (*e != ' ' && *e != '\t' && *e != '\0')
             break;
 
-        recur->by_year_day[i] = year_day;
+        recur->by[ICAL_BY_YEAR_DAY].data[i] = year_day;
 
         s = e;
         /* Skip any whitespace. */
@@ -1149,9 +1179,9 @@ static const char *rrule_parse_yearly_days(const char *s,
             s++;
     }
 
-    /* Terminate the array, if it isn't full. */
-    if (i < ICAL_BY_YEARDAY_SIZE)
-        recur->by_year_day[i] = ICAL_RECURRENCE_ARRAY_MAX;
+    if (!icalrecur_resize_by(&recur->by[ICAL_BY_YEAR_DAY], i)) {
+        return NULL;
+    }
 
     return s;
 }
@@ -1178,7 +1208,7 @@ static void *rule_prop(int icaltype, VObject *object, icalcomponent *comp,
     const char *s, *p, *parsestat, *error_message;
     const char *property_name;
     int free_string;
-    struct icalrecurrencetype recur;
+    struct icalrecurrencetype *recur;
 
     _unused(icaltype);
     _unused(comp);
@@ -1188,46 +1218,48 @@ static void *rule_prop(int icaltype, VObject *object, icalcomponent *comp,
 
     property_name = vObjectName(object);
 
-    icalrecurrencetype_clear(&recur);
+    recur = icalrecurrencetype_new();
 
     error_message = NULL;
     parsestat = NULL;
-    if (*s == 'D') {
+    if (!recur) {
+        error_message = "Out of memory";
+    } else if (*s == 'D') {
         /* The DAILY RRULE only has an interval and duration (COUNT/UNTIL). */
-        recur.freq = ICAL_DAILY_RECURRENCE;
-        p = rrule_parse_interval(s + 1, &recur, &error_message);
-        parsestat = rrule_parse_duration(p, &recur, &error_message);
+        recur->freq = ICAL_DAILY_RECURRENCE;
+        p = rrule_parse_interval(s + 1, recur, &error_message);
+        parsestat = rrule_parse_duration(p, recur, &error_message);
     } else if (*s == 'W') {
         /* The WEEKLY RRULE has weekday modifiers - MO TU WE. */
-        recur.freq = ICAL_WEEKLY_RECURRENCE;
-        p = rrule_parse_interval(s + 1, &recur, &error_message);
-        p = rrule_parse_weekly_days(p, &recur, &error_message);
-        parsestat = rrule_parse_duration(p, &recur, &error_message);
+        recur->freq = ICAL_WEEKLY_RECURRENCE;
+        p = rrule_parse_interval(s + 1, recur, &error_message);
+        p = rrule_parse_weekly_days(p, recur, &error_message);
+        parsestat = rrule_parse_duration(p, recur, &error_message);
     } else if (*s == 'M' && *(s + 1) == 'D') {
         /* The MONTHLY By Day RRULE has day number modifiers - 1 1- LD. */
-        recur.freq = ICAL_MONTHLY_RECURRENCE;
-        p = rrule_parse_interval(s + 2, &recur, &error_message);
-        p = rrule_parse_monthly_days(p, &recur, &error_message);
-        parsestat = rrule_parse_duration(p, &recur, &error_message);
+        recur->freq = ICAL_MONTHLY_RECURRENCE;
+        p = rrule_parse_interval(s + 2, recur, &error_message);
+        p = rrule_parse_monthly_days(p, recur, &error_message);
+        parsestat = rrule_parse_duration(p, recur, &error_message);
     } else if (*s == 'M' && *(s + 1) == 'P') {
         /* The MONTHLY By Position RRULE has position modifiers - 1 2- and
            weekday modifiers - MO TU. */
-        recur.freq = ICAL_MONTHLY_RECURRENCE;
-        p = rrule_parse_interval(s + 2, &recur, &error_message);
-        p = rrule_parse_monthly_positions(p, &recur, &error_message);
-        parsestat = rrule_parse_duration(p, &recur, &error_message);
+        recur->freq = ICAL_MONTHLY_RECURRENCE;
+        p = rrule_parse_interval(s + 2, recur, &error_message);
+        p = rrule_parse_monthly_positions(p, recur, &error_message);
+        parsestat = rrule_parse_duration(p, recur, &error_message);
     } else if (*s == 'Y' && *(s + 1) == 'M') {
         /* The YEARLY By Month RRULE has month modifiers - 1 3 12. */
-        recur.freq = ICAL_YEARLY_RECURRENCE;
-        p = rrule_parse_interval(s + 2, &recur, &error_message);
-        p = rrule_parse_yearly_months(p, &recur, &error_message);
-        parsestat = rrule_parse_duration(p, &recur, &error_message);
+        recur->freq = ICAL_YEARLY_RECURRENCE;
+        p = rrule_parse_interval(s + 2, recur, &error_message);
+        p = rrule_parse_yearly_months(p, recur, &error_message);
+        parsestat = rrule_parse_duration(p, recur, &error_message);
     } else if (*s == 'Y' && *(s + 1) == 'D') {
         /* The YEARLY By Day RRULE has day number modifiers - 100 200. */
-        recur.freq = ICAL_YEARLY_RECURRENCE;
-        p = rrule_parse_interval(s + 2, &recur, &error_message);
-        p = rrule_parse_yearly_days(p, &recur, &error_message);
-        parsestat = rrule_parse_duration(p, &recur, &error_message);
+        recur->freq = ICAL_YEARLY_RECURRENCE;
+        p = rrule_parse_interval(s + 2, recur, &error_message);
+        p = rrule_parse_yearly_days(p, recur, &error_message);
+        parsestat = rrule_parse_duration(p, recur, &error_message);
     }
 
     if (!parsestat) {
@@ -1245,6 +1277,9 @@ static void *rule_prop(int icaltype, VObject *object, icalcomponent *comp,
 
     if (free_string)
         deleteStr(s);
+
+    if (recur)
+        icalrecurrencetype_unref(recur);
 
     return (void *)prop;
 }

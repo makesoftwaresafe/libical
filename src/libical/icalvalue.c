@@ -56,28 +56,28 @@ icalvalue *icalvalue_new(icalvalue_kind kind)
 
 icalvalue *icalvalue_clone(const icalvalue *old)
 {
-    struct icalvalue_impl *new;
+    struct icalvalue_impl *clone;
 
-    new = icalvalue_new_impl(old->kind);
+    clone = icalvalue_new_impl(old->kind);
 
-    if (new == 0) {
+    if (clone == 0) {
         return 0;
     }
 
-    strcpy(new->id, old->id);
-    new->kind = old->kind;
-    new->size = old->size;
+    strcpy(clone->id, old->id);
+    clone->kind = old->kind;
+    clone->size = old->size;
 
-    switch (new->kind) {
+    switch (clone->kind) {
     case ICAL_ATTACH_VALUE:
     case ICAL_BINARY_VALUE: {
         /* Hmm.  We just ref the attach value, which may not be the right
              * thing to do.  We cannot quite copy the data, anyways, since we
              * don't know how long it is.
              */
-        new->data.v_attach = old->data.v_attach;
-        if (new->data.v_attach)
-            icalattach_ref(new->data.v_attach);
+        clone->data.v_attach = old->data.v_attach;
+        if (clone->data.v_attach)
+            icalattach_ref(clone->data.v_attach);
 
         break;
     }
@@ -85,29 +85,31 @@ icalvalue *icalvalue_clone(const icalvalue *old)
     case ICAL_STRING_VALUE:
     case ICAL_TEXT_VALUE:
     case ICAL_CALADDRESS_VALUE:
+    case ICAL_UID_VALUE:
+    case ICAL_XMLREFERENCE_VALUE:
     case ICAL_URI_VALUE: {
         if (old->data.v_string != 0) {
-            new->data.v_string = icalmemory_strdup(old->data.v_string);
+            clone->data.v_string = icalmemory_strdup(old->data.v_string);
 
-            if (new->data.v_string == 0) {
-                new->parent = 0;
-                icalvalue_free(new);
+            if (clone->data.v_string == 0) {
+                clone->parent = 0;
+                icalvalue_free(clone);
                 return 0;
             }
         }
         break;
     }
     case ICAL_ACTION_VALUE: {
-        new->data = old->data;
+        clone->data = old->data;
 
         if (old->data.v_enum == ICAL_ACTION_X) {
             //preserve the custom action string
             if (old->x_value != 0) {
-                new->x_value = icalmemory_strdup(old->x_value);
+                clone->x_value = icalmemory_strdup(old->x_value);
 
-                if (new->x_value == 0) {
-                    new->parent = 0;
-                    icalvalue_free(new);
+                if (clone->x_value == 0) {
+                    clone->parent = 0;
+                    icalvalue_free(clone);
                     return 0;
                 }
             }
@@ -116,10 +118,9 @@ icalvalue *icalvalue_clone(const icalvalue *old)
     }
     case ICAL_RECUR_VALUE: {
         if (old->data.v_recur != 0) {
-            icalvalue_set_recur(new, *(old->data.v_recur));
-
-            if (new->data.v_recur == 0) {
-                icalvalue_free(new);
+            clone->data.v_recur = icalrecurrencetype_clone(old->data.v_recur);
+            if (clone->data.v_recur == 0) {
+                icalvalue_free(clone);
                 return 0;
             }
         }
@@ -128,11 +129,11 @@ icalvalue *icalvalue_clone(const icalvalue *old)
 
     case ICAL_X_VALUE: {
         if (old->x_value != 0) {
-            new->x_value = icalmemory_strdup(old->x_value);
+            clone->x_value = icalmemory_strdup(old->x_value);
 
-            if (new->x_value == 0) {
-                new->parent = 0;
-                icalvalue_free(new);
+            if (clone->x_value == 0) {
+                clone->parent = 0;
+                icalvalue_free(clone);
                 return 0;
             }
         }
@@ -144,11 +145,11 @@ icalvalue *icalvalue_clone(const icalvalue *old)
         /* all of the other types are stored as values, not
                pointers, so we can just copy the whole structure. */
 
-        new->data = old->data;
+        clone->data = old->data;
     }
     }
 
-    return new;
+    return clone;
 }
 
 icalvalue *icalvalue_new_clone(const icalvalue *old)
@@ -239,7 +240,11 @@ static char *icalmemory_strdup_and_dequote(const char *str)
  */
 static char *icalmemory_strdup_and_quote(const icalvalue *value, const char *unquoted_str)
 {
-    static const size_t MAX_ITERATIONS = (1024 * 1024 * 10); // should be plenty. to avoid timeouts when fuzzy testing
+    /* oss-fuzz sets the cpu timeout at 60 seconds.
+     * In order to meet that requirement we'd need to set MAX_ITERATIONS to (1024 * 128) approximately.
+     * We don't feel safe setting MAX_ITERATIONS that low.
+     */
+    static const size_t MAX_ITERATIONS = (1024 * 1024 * 10); // should be plenty, but not low enough to avoid timeouts when fuzzy testing
     char *str;
     char *str_p;
     const char *p;
@@ -375,7 +380,7 @@ static int simple_str_to_doublestr(const char *from, char *result, int result_le
         ++cur;
     }
     end = cur;
-    len = end - start;
+    len = (int)(ptrdiff_t)(end - start);
     if (len + 1 >= result_len) {
         /* huh hoh, number is too big. truncate it */
         len = result_len - 1;
@@ -598,13 +603,13 @@ static icalvalue *icalvalue_new_from_string_with_error(icalvalue_kind kind,
     } break;
 
     case ICAL_RECUR_VALUE: {
-        struct icalrecurrencetype rt;
+        struct icalrecurrencetype *rt;
 
-        rt = icalrecurrencetype_from_string(str);
-        if (rt.freq != ICAL_NO_RECURRENCE) {
+        rt = icalrecurrencetype_new_from_string(str);
+        if (rt) {
             value = icalvalue_new_recur(rt);
+            icalrecurrencetype_unref(rt);
         }
-        icalmemory_free_buffer(rt.rscale);
         break;
     }
 
@@ -680,6 +685,18 @@ static icalvalue *icalvalue_new_from_string_with_error(icalvalue_kind kind,
         break;
     }
 
+    case ICAL_UID_VALUE: {
+        char *dequoted_str = icalmemory_strdup_and_dequote(str);
+
+        value = icalvalue_new_uid(dequoted_str);
+        icalmemory_free_buffer(dequoted_str);
+        break;
+    }
+
+    case ICAL_XMLREFERENCE_VALUE:
+        value = icalvalue_new_xmlreference(str);
+        break;
+
     case ICAL_X_VALUE: {
         char *dequoted_str = icalmemory_strdup_and_dequote(str);
 
@@ -753,6 +770,8 @@ void icalvalue_free(icalvalue *v)
     case ICAL_URI_VALUE:
     case ICAL_STRING_VALUE:
     case ICAL_QUERY_VALUE: {
+    case ICAL_UID_VALUE:
+    case ICAL_XMLREFERENCE_VALUE:
         if (v->data.v_string != 0) {
             icalmemory_free_buffer((void *)v->data.v_string);
             v->data.v_string = 0;
@@ -761,9 +780,8 @@ void icalvalue_free(icalvalue *v)
     }
     case ICAL_RECUR_VALUE: {
         if (v->data.v_recur != 0) {
-            icalmemory_free_buffer(v->data.v_recur->rscale);
-            icalmemory_free_buffer((void *)v->data.v_recur);
-            v->data.v_recur = 0;
+            icalrecurrencetype_unref(v->data.v_recur);
+            v->data.v_recur = NULL;
         }
         break;
     }
@@ -1145,6 +1163,7 @@ char *icalvalue_as_ical_string_r(const icalvalue *value)
         return icalvalue_utcoffset_as_ical_string_r(value);
 
     case ICAL_TEXT_VALUE:
+    case ICAL_UID_VALUE:
         return icalvalue_text_as_ical_string_r(value);
 
     case ICAL_QUERY_VALUE:
@@ -1153,6 +1172,7 @@ char *icalvalue_as_ical_string_r(const icalvalue *value)
     case ICAL_STRING_VALUE:
     case ICAL_URI_VALUE:
     case ICAL_CALADDRESS_VALUE:
+    case ICAL_XMLREFERENCE_VALUE:
         return icalvalue_string_as_ical_string_r(value);
 
     case ICAL_DATE_VALUE:
@@ -1336,6 +1356,8 @@ icalparameter_xliccomparetype icalvalue_compare(const icalvalue *a, const icalva
     case ICAL_DATETIME_VALUE:
     case ICAL_DATETIMEPERIOD_VALUE:
     case ICAL_QUERY_VALUE:
+    case ICAL_UID_VALUE:
+    case ICAL_XMLREFERENCE_VALUE:
     case ICAL_RECUR_VALUE: {
         int r;
         char *temp1, *temp2;

@@ -81,14 +81,12 @@ macro(testme _name _srcs)
 endmacro()
 
 ########## libical-glib tests #########
-if(ICAL_GLIB AND HAVE_INTROSPECTION)
+if(ICAL_GLIB AND GOBJECT_INTROSPECTION)
   add_subdirectory(libical-glib)
 endif()
 
 ########## libicalvcard tests #########
-if(ICAL_VCARD)
-  add_subdirectory(libicalvcard)
-endif()
+add_subdirectory(libicalvcard)
 
 ########### next target ###############
 
@@ -241,19 +239,23 @@ testme(icalcomponent_fuzz1 icalcomponent_fuzz1.c)
 testme(icalcomponent_fuzz2 icalcomponent_fuzz2.c)
 
 testme(icaltime_fuzz icaltime_fuzz.c)
+testme(icalcomponent_timefuzz icalcomponent_timefuzz.c)
 
 libical_option(LIBICAL_BUILD_TESTING_BIGFUZZ "Build big fuzzer tests." False)
 if(LIBICAL_BUILD_TESTING_BIGFUZZ)
   foreach(
     fuzztest
-    52787
+    52787 # cpu timeout fails beyond 60s
     56171
     56539
     69341
     69344
     69527
-    69888
+    69888 # cpu timeout fails beyond 60s
+    42536507 # cpu timeout fails beyond 60s
     usban
+    usban2
+    usban3
   )
     add_test(NAME fuzz1test${fuzztest} COMMAND icalcomponent_fuzz1 "${PROJECT_SOURCE_DIR}/test-data/fuzz${fuzztest}")
     setprops(fuzz1test${fuzztest})

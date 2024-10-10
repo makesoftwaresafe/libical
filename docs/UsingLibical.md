@@ -11,13 +11,15 @@ and protocol data units. The iCalendar specification describes how
 calendar clients can communicate with calendar servers so users can
 store their calendar data and arrange meetings with other users.
 
-Libical implements multiple [RFC calendar standards](@ref rfcs).
+Libical implements multiple [RFC calendar standards](rfcs.md).
 
 This documentation assumes that you are familiar with the iCalendar
-standards RFC5545 and RFC5546. These specifications are available
+standards [RFC5545][] and [RFC5546][]. These specifications are available
 at the [IETF Tools][] website:
 
 [IETF Tools]: https://tools.ietf.org/
+[RFC5545]: https://tools.ietf.org/html/rfc5545
+[RFC5546]: https://tools.ietf.org/html/rfc5546
 
 ### 1.1 The libical project
 
@@ -45,13 +47,11 @@ Also look in `src/test/` for additional annotated examples.
 
 ## 2 Building the Library
 
-Libical uses autoconf to generate makefiles. It should build with no
-adjustments on Linux, FreeBSD and Solaris under `gcc`. Some versions
-have been successfully built on MacOS, Solaris, UnixWare, And
-Tru64 UNIX without `gcc`, but you may run into problems with a particular
-later version.
+Libical uses CMake to generate makefiles. It should build with no adjustments on Linux,
+MacOS and Windows using `gcc`, `clang` and Microsoft Visual.  Please report build problems
+to the [Libical issue tracker](https://github.com/libical/libical/issues).
 
-For a more complete guide to building the library, see the `README` file
+For a more complete guide to building the library, see the `Install.txt` file
 in the distribution.
 
 ## 3 Structure
@@ -752,6 +752,18 @@ void icalvalue_set_datetime(
     struct icaltimetype v);
 ```
 
+Some complex value types, such as `ATTACH` and `RECUR`, are passed by reference
+rather than by value. For example, when using `icalvalue_get_recur()`, you
+receive a reference to the internal state of the value object. Conversely, when
+setting these values, the value object retains a reference to the original
+object instead of creating a copy.
+
+**Caution:** Manipulating this referenced object will also modify the owning
+value object.
+
+Be mindful of the memory management for these objects, which is managed through
+reference counting. For more details, see [Memory Management](#memory).
+
 When working with an extension property or value (and `X-PROPERTY` or
 a property that has the parameter `VALUE=x-name`), the value type is
 always a string. To get and set the value, use:
@@ -1210,9 +1222,9 @@ DTSTART <= '20000106T120000Z'");
 There are several other routines in the icalset interface, but they
 not fully implemented yet.
 
-<a id="memory"></a>
 #### 5.5 Memory Management
 
+<a id="memory"></a>
 Libical relies heavily on dynamic allocation for both the core objects
 and for the strings used to hold values. Some of this memory the library
 caller owns and must free, and some of the memory is managed by the
@@ -1226,11 +1238,14 @@ library. Here is a summary of the memory rules.
 2. If you got the memory from a routine with "clone" or "new" in it, you
    must call the corresponding `*_free()` routine to free the memory,
    for example use `icalcomponent_free()` to free objects created with
-   `icalcomponent_new()` or `icalcomponent_clone()`
+   `icalcomponent_new()` or `icalcomponent_clone()`. The only exception
+   to this rule are objects that implement reference counting (i.e.
+   `icalattach` and `icalrecurrencetype`), which are deallocated via
+   `*_unref()` functions. Learn more in the next section.
 
 3. If the function name has "add" in it, the caller is transferring
    control of the memory to the routine, for example the function
-   ` icalproperty_add_parameter()`
+   `icalproperty_add_parameter()`
 
 4. If the function name has "remove" in it, the caller passes in
    a pointer to an object and after the call returns, the caller owns
@@ -1247,6 +1262,33 @@ library. Here is a summary of the memory rules.
    For example, `icalcomponent_as_ical_string_r()` does the same thing as
    `icalcomponent_as_ical_string()`, except you now have control of the
    string buffer it returns.
+
+#### 5.5.1 Reference Counting
+
+Some special types are managed using reference counting, in particular:
+
+- `icalattach`
+- `struct icalrecurrencetype`
+
+Just as any other object they are allocated using any of the `*_new*()` functions, e.g.
+
+- `icalrecurrencetype_new_from_string()`
+- `icalattach_new_from_data()`
+
+When an object is returned by one of these constructor functions, its reference counter is set to 1.
+
+The reference counter can be modified using:
+
+- `*_ref()` – to increase the counter.
+- `*_unref()` – to decrease the counter.
+
+The object is automatically deallocated when the reference counter reaches 0.
+No explicit `*_free()` functions exist for these types.
+
+When such objects are passed to functions as arguments, it is the task of the function being called
+to manage the reference counter, not of the caller. If a pointer to an object is returned by a
+function other than the constructor functions, it is the task of the calling function rather than
+of the returning function to manage the reference counter.
 
 ### 5.6 Error Handling
 

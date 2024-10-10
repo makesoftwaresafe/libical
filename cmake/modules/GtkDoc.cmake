@@ -54,6 +54,7 @@ macro(
   _srcdirsvar
   _depsvar
   _ignoreheadersvar
+  _extra_ldflags
 )
   configure_file(
     ${CMAKE_CURRENT_SOURCE_DIR}/${_module}-docs.sgml.in ${CMAKE_CURRENT_BINARY_DIR}/${_module}-docs.sgml @ONLY
@@ -79,9 +80,19 @@ macro(
 
   set(_scangobj_deps)
   set(_scangobj_cflags_list)
-  set(_scangobj_cflags "")
-  set(_scangobj_ldflags "")
+  set(_scangobj_cflags "-Wno-error=unused-parameter")
+  set(_scangobj_ldflags "${_extra_ldflags}")
   set(_scangobj_ld_lib_dirs "")
+
+  # LIB_INSTALL_DIR might be a relative path, (eg. "lib")
+  cmake_path(SET _nativeLibPath "${LIB_INSTALL_DIR}")
+  cmake_path(IS_RELATIVE _nativeLibPath _libIsRelative)
+  if(_libIsRelative)
+    #join to install prefix
+    set(_libraryDir "${CMAKE_INSTALL_PREFIX}/${LIB_INSTALL_DIR}")
+  else()
+    set(_libraryDir "${LIB_INSTALL_DIR}")
+  endif()
 
   foreach(opt IN LISTS ${_depsvar})
     if(TARGET ${opt})
@@ -121,7 +132,7 @@ macro(
   endif()
 
   foreach(opt IN LISTS _scangobj_cflags_list)
-    set(_scangobj_cflags "${_scangobj_cflags} ${opt}")
+    set(_scangobj_cflags "${opt} ${_scangobj_cflags}")
   endforeach()
 
   foreach(opt IN LISTS _scangobj_deps)
@@ -158,15 +169,15 @@ macro(
   endforeach()
 
   # Add it as the last, thus in-tree libs have precedence
-  set(_scangobj_ldflags "${_scangobj_ldflags} -L${LIB_INSTALL_DIR}")
+  set(_scangobj_ldflags "${_scangobj_ldflags} -L${_libraryDir}")
 
   if(APPLE)
-    set(ld_lib_path "DYLD_LIBRARY_PATH=${_scangobj_ld_lib_dirs}:${LIB_INSTALL_DIR}")
+    set(ld_lib_path "DYLD_LIBRARY_PATH=${_scangobj_ld_lib_dirs}:${_libraryDir}")
     if(DEFINED DYLD_LIBRARY_PATH)
       set(ld_lib_path "${ld_lib_path}:$ENV{DYLD_LIBRARY_PATH}")
     endif()
   elseif(NOT WIN32 AND NOT WINCE) #ie. unix-like
-    set(ld_lib_path "LD_LIBRARY_PATH=${_scangobj_ld_lib_dirs}:${LIB_INSTALL_DIR}")
+    set(ld_lib_path "LD_LIBRARY_PATH=${_scangobj_ld_lib_dirs}:${_libraryDir}")
     if(DEFINED LD_LIBRARY_PATH)
       set(ld_lib_path "${ld_lib_path}:$ENV{LD_LIBRARY_PATH}")
     endif()

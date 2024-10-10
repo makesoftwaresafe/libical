@@ -121,7 +121,7 @@ else()
 endif()
 
 add_custom_target(
-  vcard-header ALL
+  icalvcard-header ALL
   DEPENDS ${PROJECT_BINARY_DIR}/src/libicalvcard/vcard.h
   COMMENT "Target to generate the aggregate vcard.h header"
 )
@@ -167,10 +167,10 @@ add_library(
   icalvcard
   ${LIBRARY_TYPE} ${icalvcard_LIB_SRCS}
 )
-add_dependencies(ical ical-header)
+add_dependencies(icalvcard ical-header icalvcard-header)
 if(NOT SHARED_ONLY AND NOT STATIC_ONLY)
   add_library(icalvcard-static STATIC ${icalvcard_LIB_SRCS})
-  add_dependencies(icalvcard-static ical-header)
+  add_dependencies(icalvcard-static ical-header icalvcard-header)
 elseif(STATIC_ONLY)
   add_library(icalvcard-static ALIAS icalvcard)
 endif()
@@ -178,12 +178,6 @@ endif()
 target_link_libraries(
   icalvcard ical
 )
-
-if(MSVC)
-  target_compile_options(icalvcard PRIVATE /W4 /WX)
-else()
-  target_compile_options(icalvcard PRIVATE -Wall -Wextra -Werror)
-endif()
 
 if(MSVC)
   set_target_properties(icalvcard PROPERTIES PREFIX "lib")

@@ -74,37 +74,37 @@ void icalparameter_free(icalparameter *param)
 
 icalparameter *icalparameter_clone(const icalparameter *old)
 {
-    struct icalparameter_impl *new;
+    struct icalparameter_impl *clone;
 
     icalerror_check_arg_rz((old != 0), "param");
 
-    new = icalparameter_new_impl(old->kind);
+    clone = icalparameter_new_impl(old->kind);
 
-    if (new == 0) {
+    if (clone == 0) {
         return 0;
     }
 
-    memcpy(new, old, sizeof(struct icalparameter_impl));
+    memcpy(clone, old, sizeof(struct icalparameter_impl));
 
     if (old->string != 0) {
-        new->string = icalmemory_strdup(old->string);
-        if (new->string == 0) {
-            new->parent = 0;
-            icalparameter_free(new);
+        clone->string = icalmemory_strdup(old->string);
+        if (clone->string == 0) {
+            clone->parent = 0;
+            icalparameter_free(clone);
             return 0;
         }
     }
 
     if (old->x_name != 0) {
-        new->x_name = icalmemory_strdup(old->x_name);
-        if (new->x_name == 0) {
-            new->parent = 0;
-            icalparameter_free(new);
+        clone->x_name = icalmemory_strdup(old->x_name);
+        if (clone->x_name == 0) {
+            clone->parent = 0;
+            icalparameter_free(clone);
             return 0;
         }
     }
 
-    return new;
+    return clone;
 }
 
 icalparameter *icalparameter_new_clone(icalparameter *old)
@@ -296,7 +296,12 @@ char *icalparameter_as_ical_string_r(icalparameter *param)
 
     icalmemory_append_string(&buf, &buf_ptr, &buf_size, "=");
 
-    if (param->string != 0) {
+    if (param->kind == ICAL_GAP_PARAMETER) {
+        char *str = icaldurationtype_as_ical_string_r(param->duration);
+
+        icalmemory_append_string(&buf, &buf_ptr, &buf_size, str);
+        icalmemory_free_buffer(str);
+    } else if (param->string != 0) {
         icalparameter_append_encoded_value(&buf, &buf_ptr, &buf_size, param->string);
     } else if (param->data != 0) {
         const char *str = icalparameter_enum_to_string(param->data);

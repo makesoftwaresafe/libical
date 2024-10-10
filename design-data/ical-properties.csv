@@ -34,7 +34,7 @@
 "CONTACT","18","TEXT","TEXT"
 "ORGANIZER","52","CAL-ADDRESS","CAL-ADDRESS"
 "RECURRENCE-ID","66","DATE-TIME-DATE","DATE-TIME"
-"RELATED-TO","67","TEXT","TEXT"
+"RELATED-TO","67","RELATED-TO","TEXT"
 "URL","88","URI","URI"
 "UID","87","TEXT","TEXT"
 "EXDATE","35","DATE-TIME-DATE","DATE-TIME",is_multivalued
@@ -115,14 +115,14 @@
 "ANY","0","NO","NO"
 "NO","100","NO","NO"
 
-"#VALARM Extension Properties", "RFC 9073 Sections 6.1, 8.1",
+"#VALARM Extension Properties", "RFC 9074 Sections 6.1, 8.1",
 "ACKNOWLEDGED","1","DATE-TIME","DATE-TIME"
 "PROXIMITY","126","PROXIMITY","PROXIMITY"
 
 "#VAVAILABILITY Properties","RFC 7953 Section 3.2",
 "BUSYTYPE","101","BUSYTYPE","BUSYTYPE"
 
-"#VPOLL Properties","draft-york-vpoll",
+"#VPOLL Properties","draft-ietc-calext-vpoll","VOTER is deprecated"
 "ACCEPT-RESPONSE","102","TEXT,"TEXT",is_multivalued
 "POLL-COMPLETION","110","POLLCOMPLETION,"POLLCOMPLETION"
 "POLL-ITEM-ID","103","INTEGER,"INTEGER"
@@ -163,5 +163,10 @@
 "CALENDAR-ADDRESS","130","CAL-ADDRESS","CAL-ADDRESS"
 "STYLED-DESCRIPTION","131","TEXT","NO"
 "STRUCTURED-DATA","132","ATTACH","NO",is_structured
+
+"#iCalendar Relationships Properties","RFC 9253 Section 8",
+"CONCEPT","133","URI","URI"
+"LINK","134","LINK","NO"
+"REFID","135","TEXT","TEXT"
 
 "#NOTE for updaters.  Preserve the icalproperty_kind Enum values to aid forward compatibility"

@@ -308,7 +308,7 @@ sub insert_code
             $charorenum =
                 "    icalerror_check_arg_rz((param != 0), \"param\");\n    return param->string;";
 
-            $set_code = "if (param->string != NULL) {\n        free((void *)param->string);\n    }\n    ((struct ${lcprefix}parameter_impl *)param)->string = icalmemory_strdup(v);";
+            $set_code = "if (param->string != NULL) {\n        icalmemory_free_buffer((void *)param->string);\n    }\n    ((struct ${lcprefix}parameter_impl *)param)->string = icalmemory_strdup(v);";
         }
 
         $pointer_check   = "    icalerror_check_arg_rz((v != 0), \"v\");";
@@ -329,6 +329,14 @@ sub insert_code
             "    icalerror_check_arg((param != 0), \"param\");\n$xrange";
 
         $set_code = "((struct ${lcprefix}parameter_impl *)param)->date = v;";
+
+    } elsif ($type =~ /struct icaldurationtype/) {
+
+        $xrange = "    if (param != 0) {\n       return param->duration;\n    } else {\n       return icaldurationtype_null_duration();\n    }";
+        $charorenum =
+            "    icalerror_check_arg((param != 0), \"param\");\n$xrange";
+
+        $set_code = "((struct ${lcprefix}parameter_impl *)param)->duration = v;";
 
     } elsif ($type =~ /vcardstructuredtype/) {
 

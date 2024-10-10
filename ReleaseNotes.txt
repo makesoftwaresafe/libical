@@ -5,7 +5,10 @@ Version 3.1.0 (NOT RELEASED YET):
 --------------------------------
  * REUSE compliant licensing
  * Requires MSVC 2013 or higher (when building on Windows with MSVC)
- * Requires CMake v3.19.0 or higher
+ * Requires CMake v3.20.0 or higher
+ * Brand new icalvcard library that follows the libical API.
+ * The icalvcal library is deprecated and will be removed sometime in the 4.x series.
+   Please port your icalvcal code to use icalvcard instead.
  * For the C++ bindings, requires a C++11 compliant compiler
  * The old src/python code is removed in favor of the glib-introspection generated
    Python bindings. Requires building with -DGOBJECT_INTROSPECTION=ON
@@ -17,6 +20,10 @@ Version 3.1.0 (NOT RELEASED YET):
  * draft-ietf-calext-valarm-extensions-07 (RFC 9074) support added
  * libical-glib API is considered stable; no longer need to define LIBICAL_GLIB_UNSTABLE_API=1
    before including <libical-glib/libical-glib.h>
+ * icalrecurrencetype now handled by reference rather than by value throughout the library.
+ * icalrecur_iterator_new() now keeps a reference to the passed rule, so that mustn't be modified as long as the iterator is in use.
+ * icalrecurrencetype.by_xxx static arrays replaced by dynamically allocated ones.
+ * GLib/Python bindings: `i_cal_recurrence_*_by_xxx*` methods have been replaced by more generic versions that take the 'by' type (day, month, ...) as a parameter.
  * Allow previous recurrence iteration
  * Improved performance of recurrence iterators
  * GEO property has arbitrary precision (values are internally stored as strings, not doubles)
@@ -34,6 +41,12 @@ Version 3.1.0 (NOT RELEASED YET):
     + icalvalue_clone
     + icalcluster_clone
     + icalrecur_iterator_prev
+    + icalrecur_resize_by
+    + icalrecurrencetype_new
+    + icalrecurrencetype_ref
+    + icalrecurrencetype_unref
+    + icalrecurrencetype_clone
+    + icalrecurrencetype_from_string
     + icalcomponent_set_x_name
     + icalcomponent_get_x_name
     + icalcomponent_get_component_name
@@ -42,6 +55,19 @@ Version 3.1.0 (NOT RELEASED YET):
     + ical_get_invalid_rrule_handling_setting
     + icalparser_get_ctrl
     + icalparser_set_ctrl
+ * Functions with changed Signature
+    + icalproperty_new_rrule()
+    + icalproperty_get_rrule()
+    + icalproperty_set_rrule()
+    + icalproperty_vanew_rrule()
+    + icalproperty_new_exrule()
+    + icalproperty_get_exrule()
+    + icalproperty_set_exrule()
+    + icalproperty_vanew_exrule()
+    + icalrecur_iterator_new
+    + icalvalue_new_recur
+    + icalvalue_get_recur
+    + icalvalue_set_recur
  * Deprecated functions:
     + caldat (replaced by internal function icaldat_int())
     + juldat (replaced by internal function juldat_int())
@@ -52,6 +78,7 @@ Version 3.1.0 (NOT RELEASED YET):
     + icalcluster_new_clone
  * No longer publicly available functions:
     + icaltzutil_fetch_timezone
+    + icalrecurrencetype_clear
  * Removed unused declarations:
     (were in the public headers but not used at all)
     + struct icaltimezonetype

@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: LGPL-2.1-only OR MPL-2.0
 #
 # Pass the following variables to cmake to control the build:
-# (See doc/UsingLibical.md for more information)
+# (See docs/UsingLibical.md for more information)
 #
 # -DWITH_CXX_BINDINGS=[true|false]
 #  Build the C++ bindings.
@@ -127,7 +127,7 @@
 #  is available, it will be used; otherwise, no synchronization is applied.
 #  Default: false.
 
-cmake_minimum_required(VERSION 3.19.0)
+cmake_minimum_required(VERSION 3.20.0)
 project(libical C) #CXX is optional for the bindings
 
 cmake_policy(SET CMP0003 NEW)
@@ -192,7 +192,7 @@ if(WITH_CXX_BINDINGS)
   if(CMAKE_CXX_COMPILER)
     add_definitions(-DWITH_CXX_BINDINGS)
   else()
-    message(STATUS "Warning: Building the C++ bindings is not possible since a C++ compiler could not be found. "
+    message(STATUS "Building the C++ bindings is not possible since a C++ compiler could not be found. "
                    "Turning-off C++ bindings."
     )
     set(WITH_CXX_BINDINGS False)
@@ -238,18 +238,12 @@ endif()
 # libicu is highly recommended for RSCALE support
 #  libicu can be found at http://www.icu-project.org
 #  RSCALE info at http://tools.ietf.org/html/rfc7529
-if(DEFINED ICU_BASE) #to make --warn-uninitialized happy
-  if(NOT "$ENV{ICU_BASE}" STREQUAL "") #support the old ICU_BASE env
-    set(ICU_ROOT $ENV{ICU_BASE})
-  endif()
+if(DEFINED ENV{ICU_BASE}) # keep backwards compatibility for ICU_BASE
+  set(ICU_ROOT $ENV{ICU_BASE})
 endif()
-if(DEFINED ICU_ROOT) #to make --warn-uninitialized happy
-  if(NOT "$ENV{ICU_ROOT}")
-    #Use the homebrew version. MacOS provided ICU doesn't provide development files
-    if(APPLE)
-      set(ICU_ROOT "/usr/local/opt/icu4c")
-    endif()
-  endif()
+if(NOT DEFINED ENV{ICU_ROOT} AND APPLE)
+  #Use the homebrew version. MacOS provided ICU doesn't provide development files
+  set(ICU_ROOT "/usr/local/opt/icu4c")
 endif()
 find_package(ICU COMPONENTS uc i18n data)
 set_package_properties(
@@ -323,11 +317,14 @@ if(WIN32)
     if(USE_32BIT_TIME_T)
       add_definitions(-D_USE_32BIT_TIME_T)
     endif()
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /W3 /WX")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /W3 /WX")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4211") #allow redefine extern as static
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4290") #C++ exception specification ignored
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4068") #unknown pragma
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4028") #formal parameter differs
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4068") #unknown pragma
+
   endif()
   add_definitions(-DBIG_ENDIAN=0 -DLITTLE_ENDIAN=1 -DBYTE_ORDER=BIG_ENDIAN)
 endif()
@@ -472,7 +469,6 @@ if(GOBJECT_INTROSPECTION)
     PURPOSE "Needed in order to build the GObject introspection \"typelib\" files."
   )
   if(GObjectIntrospection_FOUND)
-    set(HAVE_INTROSPECTION TRUE)
     if(STATIC_ONLY)
       message(
         FATAL_ERROR
@@ -585,8 +581,6 @@ else()
   set(ENABLE_GTK_DOC False)
 endif()
 
-libical_option(ICAL_VCARD "Build vCard support" True)
-
 #
 # Compiler settings
 #
@@ -601,10 +595,11 @@ if(DEFINED CMAKE_C_COMPILER_ID)
 endif()
 if(CMAKE_C_COMPILER_IS_GCC OR CMAKE_C_COMPILER_IS_CLANG)
   set(CMAKE_C_FLAGS
-      "${CMAKE_C_FLAGS} -fvisibility=hidden \
-    -Wno-deprecated -Wall -Wno-unknown-pragmas -Wextra -Winit-self -Wunused -Wno-div-by-zero \
-    -Wundef -Wpointer-arith -Wtype-limits -Wwrite-strings -Werror=return-type \
-    -Wold-style-definition -Wstrict-prototypes"
+      "${CMAKE_C_FLAGS} \
+      -Werror -fvisibility=hidden \
+      -Wno-deprecated -Wall -Wno-unknown-pragmas -Wextra -Winit-self -Wunused -Wno-div-by-zero \
+      -Wundef -Wpointer-arith -Wtype-limits -Wwrite-strings -Wreturn-type \
+      -Wold-style-definition -Wstrict-prototypes"
   )
   libical_add_cflag(-Wunused-but-set-variable UNUSED_BUT_SET)
   libical_add_cflag(-Wlogical-op LOGICAL_OP)
@@ -632,9 +627,10 @@ if(DEFINED CMAKE_CXX_COMPILER_ID)
 endif()
 if(CMAKE_CXX_COMPILER_IS_GCC OR CMAKE_CXX_COMPILER_IS_CLANG)
   set(CMAKE_CXX_FLAGS
-      "${CMAKE_CXX_FLAGS} -fvisibility=hidden \
-    -Weffc++ -Wno-deprecated -Wall -Wextra -Woverloaded-virtual -Winit-self -Wunused \
-    -Wno-div-by-zero -Wundef -Wpointer-arith -Wtype-limits -Wwrite-strings -Werror=return-type"
+      "${CMAKE_CXX_FLAGS} -Werror \
+      -fvisibility=hidden \
+      -Weffc++ -Wno-deprecated -Wall -Wextra -Woverloaded-virtual -Winit-self -Wunused \
+      -Wno-div-by-zero -Wundef -Wpointer-arith -Wtype-limits -Wwrite-strings -Wreturn-type"
   )
   libical_add_cxxflag(-Wunused-but-set-variable UNUSED_BUT_SET)
   libical_add_cxxflag(-Wlogical-op LOGICAL_OP)
@@ -688,16 +684,10 @@ if(LIBICAL_DEVMODE_ADDRESS_SANITIZER)
     message(FATAL_ERROR "You are trying to build with the address sanitizer using a non-GCC or Clang compiler.")
   endif()
   if(GOBJECT_INTROSPECTION)
-    message(STATUS "Warning: Building the address sanitizer with GObject Introspection is is not supported. "
-                   "Turning-off GObject Introspection."
+    message(WARNING "Building the address sanitizer with GObject Introspection is not supported. "
+                    "Turning-off GObject Introspection."
     )
-    set(HAVE_INTROSPECTION False)
-  endif()
-  if(ICAL_GLIB)
-    message(STATUS "Warning: Building the address sanitizer with the GObject interface is not supported. "
-                   "Turning-off the GObject interface."
-    )
-    set(ICAL_GLIB False)
+    set(GOBJECT_INTROSPECTION False)
   endif()
 endif()
 
@@ -713,16 +703,10 @@ if(LIBICAL_DEVMODE_THREAD_SANITIZER)
     message(FATAL_ERROR "You are trying to build with the thread sanitizer using a non-GCC or Clang compiler.")
   endif()
   if(GOBJECT_INTROSPECTION)
-    message(STATUS "Warning: Building the thread sanitizer with GObject Introspection is is not supported. "
-                   "Turning-off GObject Introspection."
+    message(WARNING "Building the thread sanitizer with GObject Introspection is not supported. "
+                    "Turning-off GObject Introspection."
     )
-    set(HAVE_INTROSPECTION False)
-  endif()
-  if(ICAL_GLIB)
-    message(STATUS "Warning: Building the thread sanitizer with the GObject interface is not supported. "
-                   "Turning-off the GObject interface."
-    )
-    set(ICAL_GLIB False)
+    set(GOBJECT_INTROSPECTION False)
   endif()
 endif()
 
@@ -738,16 +722,10 @@ if(LIBICAL_DEVMODE_UNDEFINED_SANITIZER)
     message(FATAL_ERROR "You are trying to build with the undefined sanitizer using a non-GCC or Clang compiler.")
   endif()
   if(GOBJECT_INTROSPECTION)
-    message(STATUS "Warning: Building the undefined sanitizer with GObject Introspection is is not supported. "
-                   "Turning-off GObject Introspection."
+    message(WARNING "Building the undefined sanitizer with GObject Introspection is not supported. "
+                    "Turning-off GObject Introspection."
     )
-    set(HAVE_INTROSPECTION False)
-  endif()
-  if(ICAL_GLIB)
-    message(STATUS "Warning: Building the undefined sanitizer with the GObject interface is not supported. "
-                   "Turning-off the GObject interface."
-    )
-    set(ICAL_GLIB False)
+    set(GOBJECT_INTROSPECTION False)
   endif()
 endif()
 
@@ -798,7 +776,7 @@ endif()
 
 libical_option(ICAL_BUILD_DOCS "Build documentation" True)
 if(ICAL_BUILD_DOCS)
-  add_subdirectory(doc) # needs to go last, for the build source files
+  add_subdirectory(docs) # needs to go last, for the build source files
 endif()
 
 ########### create and install pkg-config file #########
