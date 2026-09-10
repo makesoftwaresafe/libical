@@ -1,10 +1,10 @@
 include_directories(
-  ${CMAKE_BINARY_DIR}
-  ${CMAKE_SOURCE_DIR}/src
-  ${CMAKE_BINARY_DIR}/src
-  ${CMAKE_SOURCE_DIR}/src/libical
-  ${CMAKE_BINARY_DIR}/src/libical
-  ${CMAKE_SOURCE_DIR}/src/libicalss
+  ${PROJECT_BINARY_DIR}
+  ${PROJECT_SOURCE_DIR}/src
+  ${PROJECT_BINARY_DIR}/src
+  ${PROJECT_SOURCE_DIR}/src/libical
+  ${PROJECT_BINARY_DIR}/src/libical
+  ${PROJECT_SOURCE_DIR}/src/libicalss
 )
 
 if(ICU_FOUND)
@@ -15,31 +15,29 @@ if(BDB_FOUND)
   include_directories(${BDB_INCLUDE_DIR})
 endif()
 
-set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
-
-set(TEST_DATADIR "\"${CMAKE_SOURCE_DIR}/test-data\"")
-add_definitions(-DTEST_DATADIR=${TEST_DATADIR} -DTEST_ZONEDIR="${CMAKE_SOURCE_DIR}/zoneinfo")
+set(TEST_DATADIR "\"${PROJECT_SOURCE_DIR}/test-data\"")
+add_definitions(-DTEST_DATADIR=${TEST_DATADIR} -DTEST_ZONEDIR="${PROJECT_SOURCE_DIR}/zoneinfo")
 
 macro(setprops _name)
   if(UNIX)
     set_tests_properties(${_name} PROPERTIES
-      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+      WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
     )
   endif()
   if(WIN32)
-    set(tpath "${CMAKE_BINARY_DIR}/bin;%PATH%")
+    set(tpath "${PROJECT_BINARY_DIR}/bin;%PATH%")
     if(ICU_FOUND)
       set(tpath "${ICU_BINARY_DIR};${tpath}")
     endif()
     set_tests_properties(${_name} PROPERTIES
       ENVIRONMENT "PATH=${tpath}"
-      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+      WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/bin"
     )
   endif()
   if(CYGWIN OR MSYS)
     set_tests_properties(${_name} PROPERTIES
-      ENVIRONMENT "PATH=${EXECUTABLE_OUTPUT_PATH}:${CMAKE_BINARY_DIR}/lib:$ENV{PATH}"
-      WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+      ENVIRONMENT "PATH=${EXECUTABLE_OUTPUT_PATH}:${PROJECT_BINARY_DIR}/lib:$ENV{PATH}"
+      WORKING_DIRECTORY "${PROJECT_BINARY_DIR}/lib"
     )
   endif()
 endmacro()
@@ -107,7 +105,7 @@ testme(regression "${regression_SRCS}")
 set(parser_SRCS icaltestparser.c)
 buildme(parser "${parser_SRCS}")
 
-file(GLOB TEST_FILES ${CMAKE_SOURCE_DIR}/test-data/*.ics)
+file(GLOB TEST_FILES ${PROJECT_SOURCE_DIR}/test-data/*.ics)
 foreach(TEST_FILE ${TEST_FILES})
   get_filename_component(TEST_NAME ${TEST_FILE} NAME_WE)
   add_test(NAME parser-${TEST_NAME} COMMAND parser ${TEST_FILE})
@@ -170,49 +168,94 @@ set(builtin_timezones_SRCS builtin_timezones.c)
 testme(builtin_timezones "${builtin_timezones_SRCS}")
 
 ########### next target ###############
-
-#cmake v3.14 compare_files can ignore line endings => needed on Windows
-set(CMAKE_COMPARE_FILES_IGNORE_EOL FALSE)
-if(NOT ${CMAKE_VERSION} VERSION_LESS 3.14)
-  set(CMAKE_COMPARE_FILES_IGNORE_EOL TRUE)
-endif()
-if(NOT WIN32 OR CMAKE_COMPARE_FILES_IGNORE_EOL)
-  if(NOT CYGWIN AND NOT USE_32BIT_TIME_T) #ignore_eol doesn't work on Cygwin. tests for years greater than 2037 will fail
-    set(icalrecurtest_SRCS icalrecur_test.c)
-    add_executable(icalrecurtest ${icalrecurtest_SRCS})
-    target_link_libraries(icalrecurtest ical icalss icalvcal)
-    set(test_cmd "${CMAKE_BINARY_DIR}/src/test/icalrecurtest${CMAKE_EXECUTABLE_SUFFIX}")
-
-    if(ICU_FOUND)
-      #test rscale capable rrules
-      set(test_args "-r")
-      if(HAVE_ICU_DANGI)
-        set(reference_data "icalrecur_withicu_dangi_test.out")
-      else()
-        set(reference_data "icalrecur_withicu_test.out")
-      endif()
-      add_test(NAME icalrecurtest-r
-        COMMAND ${CMAKE_COMMAND}
-        -D test_cmd=${test_cmd}
-        -D test_args:string=${test_args}
-        -D output_blessed=${CMAKE_SOURCE_DIR}/src/test/${reference_data}
-        -D output_test=${CMAKE_BINARY_DIR}/bin/test.out
-        -P ${CMAKE_SOURCE_DIR}/cmake/run_test.cmake
-      )
-      setprops(icalrecurtest-r)
-    endif()
-
-    #test non-rscale rrules
-    set(test_args "")
-    set(reference_data "icalrecur_test.out")
-    add_test(NAME icalrecurtest
-      COMMAND ${CMAKE_COMMAND}
-      -D test_cmd=${test_cmd}
-      -D test_args:string=${test_args}
-      -D output_blessed=${CMAKE_SOURCE_DIR}/src/test/${reference_data}
-      -D output_test=${CMAKE_BINARY_DIR}/bin/test.out
-      -P ${CMAKE_SOURCE_DIR}/cmake/run_test.cmake
-    )
-    setprops(icalrecurtest)
+if(NOT CYGWIN AND NOT USE_32BIT_TIME_T)
+  set(icalrecurtest_SRCS icalrecur_test.c)
+  configure_file(icalrecur_test.txt ${PROJECT_BINARY_DIR}/bin/icalrecur_test.txt COPYONLY)
+  configure_file(icalrecur_test_rscale.txt ${PROJECT_BINARY_DIR}/bin/icalrecur_test_rscale.txt COPYONLY)
+  configure_file(icalrecur_test_rscale_withicu.txt ${PROJECT_BINARY_DIR}/bin/icalrecur_test_rscale_withicu.txt COPYONLY)
+  configure_file(icalrecur_test_rscale_withicu_dangi.txt ${PROJECT_BINARY_DIR}/bin/icalrecur_test_rscale_withicu_dangi.txt COPYONLY)
+  add_executable(icalrecurtest ${icalrecurtest_SRCS})
+  target_link_libraries(icalrecurtest ical icalss icalvcal)
+  if(WITH_CXX_BINDINGS)
+    # https://github.com/libical/libical/pull/656
+    set_property(TARGET icalrecurtest PROPERTY LINKER_LANGUAGE CXX)
   endif()
+  set(test_cmd "${PROJECT_BINARY_DIR}/bin/icalrecurtest${CMAKE_EXECUTABLE_SUFFIX}")
+
+  #test non-rscale rrules
+  set(reference_data "icalrecur_test.txt")
+  set(test_args "-f ${PROJECT_BINARY_DIR}/bin/${reference_data}")
+  add_test(NAME icalrecurtest COMMAND ${CMAKE_COMMAND} -D test_cmd=${test_cmd} -D test_args:string=${test_args} -P
+                                      ${PROJECT_SOURCE_DIR}/cmake/run_test.cmake
+    )
+  setprops(icalrecurtest)
+
+  #test rscale rrules without ICU
+  set(reference_data "icalrecur_test_rscale.txt")
+  set(test_args "-f ${PROJECT_BINARY_DIR}/bin/${reference_data}")
+  add_test(NAME icalrecurtest-rscale COMMAND ${CMAKE_COMMAND} -D test_cmd=${test_cmd} -D test_args:string=${test_args}
+                                             -P ${PROJECT_SOURCE_DIR}/cmake/run_test.cmake
+  )
+  setprops(icalrecurtest-rscale)
+
+  if(ICU_FOUND)
+    #test rscale rrules with ICU
+    set(reference_data "icalrecur_test_rscale_withicu.txt")
+    set(test_args "-f ${PROJECT_BINARY_DIR}/bin/${reference_data}")
+    add_test(NAME icalrecurtest-rscale-withicu
+             COMMAND ${CMAKE_COMMAND} -D test_cmd=${test_cmd} -D test_args:string=${test_args} -P
+                     ${PROJECT_SOURCE_DIR}/cmake/run_test.cmake
+    )
+    setprops(icalrecurtest-rscale-withicu)
+
+    if(HAVE_ICU_DANGI)
+      #test rscale rrules with ICU and DANGI
+      set(reference_data "icalrecur_test_rscale_withicu_dangi.txt")
+      set(test_args "-f ${PROJECT_BINARY_DIR}/bin/${reference_data}")
+      add_test(NAME icalrecurtest-rscale-withicu-dangi
+               COMMAND ${CMAKE_COMMAND} -D test_cmd=${test_cmd} -D test_args:string=${test_args} -P
+                       ${PROJECT_SOURCE_DIR}/cmake/run_test.cmake
+      )
+      setprops(icalrecurtest-rscale-withicu-dangi)
+    endif()
+  endif()
+endif()
+
+########### next target ###############
+
+set(icalparser_ctrl_test_SRCS icalparser_ctrl_test.c)
+testme(parser_ctrl "${icalparser_ctrl_test_SRCS}")
+
+############# fuzzer tests ############
+
+testme(icalcomponent_fuzz1 icalcomponent_fuzz1.c)
+testme(icalcomponent_fuzz2 icalcomponent_fuzz2.c)
+
+testme(icaltime_fuzz icaltime_fuzz.c)
+testme(icalcomponent_timefuzz icalcomponent_timefuzz.c)
+testme(icaltimezone_fuzz icaltimezone_fuzz.c)
+
+option(LIBICAL_BUILD_TESTING_BIGFUZZ "Build big fuzzer tests." False)
+if(LIBICAL_BUILD_TESTING_BIGFUZZ)
+  foreach(
+    fuzztest
+    52787 # cpu timeout fails beyond 60s
+    56171
+    56539
+    69341
+    69344
+    69527
+    69888 # cpu timeout fails beyond 60s
+    42536507 # cpu timeout fails beyond 60s
+    42536390
+    usban
+    usban2
+    usban3
+  )
+    add_test(NAME fuzz1test${fuzztest} COMMAND icalcomponent_fuzz1 "${PROJECT_SOURCE_DIR}/test-data/fuzz${fuzztest}")
+    setprops(fuzz1test${fuzztest})
+
+    add_test(NAME fuzz2test${fuzztest} COMMAND icalcomponent_fuzz2 "${PROJECT_SOURCE_DIR}/test-data/fuzz${fuzztest}")
+    setprops(fuzz2test${fuzztest})
+  endforeach()
 endif()

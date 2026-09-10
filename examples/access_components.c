@@ -24,7 +24,7 @@ void do_something(icalcomponent *c);
 
 */
 
-icalcomponent* create_new_component()
+icalcomponent* create_new_component(void)
 {
 
     /* variable definitions */
@@ -193,7 +193,7 @@ icalcomponent* create_new_component()
 /* Now, create the same component as in the previous routine, but use
 the constructor style. */
 
-icalcomponent* create_new_component_with_va_args()
+icalcomponent* create_new_component_with_va_args(void)
 {
 
     /* This is a similar set up to the last routine */
@@ -223,15 +223,15 @@ icalcomponent* create_new_component_with_va_args()
                 icalproperty_vanew_organizer(
                     "mailto:mrbig@host.com",
                     icalparameter_new_role(ICAL_ROLE_CHAIR),
-                    0
-                    ),
+                    (void *)0
+                ),
                 icalproperty_vanew_attendee(
                     "mailto:employee-A@host.com",
                     icalparameter_new_role(ICAL_ROLE_REQPARTICIPANT),
                     icalparameter_new_rsvp(1),
                     icalparameter_new_cutype(ICAL_CUTYPE_GROUP),
-                    0
-                    ),
+                    (void *)0
+                ),
                 icalproperty_new_description("Project XYZ Review Meeting"),
 
                 icalproperty_new_categories("MEETING"),
@@ -241,18 +241,18 @@ icalcomponent* create_new_component_with_va_args()
                 icalproperty_vanew_dtstart(
                     atime,
                     icalparameter_new_tzid("US-Eastern"),
-                    0
-                    ),
+                    (void *)0
+                ),
                 icalproperty_vanew_dtend(
                     atime,
                     icalparameter_new_tzid("US-Eastern"),
-                    0
-                    ),
-                icalproperty_new_location("1CP Conference Room 4350"),
-                0
+                    (void *)0
                 ),
-            0
-            );
+                icalproperty_new_location("1CP Conference Room 4350"),
+                (void *)0
+            ),
+            (void *)0
+        );
 
 
     /* Note that properties with no parameters can use the regular

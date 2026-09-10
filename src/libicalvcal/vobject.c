@@ -397,7 +397,7 @@ VObject* addGroup(VObject *o, const char *g)
             prop(VCGrouping=b)
                 prop(VCGrouping=a)
      */
-    char *dot = strrchr(g,'.');
+    char *dot = (char *)strrchr(g,'.');
     if (dot) {
         VObject *p, *t;
         char *gs, *n = dot+1;
@@ -682,7 +682,7 @@ void unUseStr(const char *s)
     }
 }
 
-void cleanStrTbl()
+void cleanStrTbl(void)
 {
     int i;
     for (i=0; i<STRTBLSIZE;i++) {
@@ -1051,6 +1051,7 @@ stuff:
 #else
 static void appendcOFile_(OFile *fp, char c)
 {
+    char *tmpMem;
     if (fp->fail) return;
     if (fp->fp) {
         fputc(c,fp->fp);
@@ -1064,10 +1065,13 @@ stuff:
             }
         else if (fp->alloc) {
             fp->limit = fp->limit + OFILE_REALLOC_SIZE;
-            fp->s = realloc(fp->s,(size_t)fp->limit);
-            if (fp->s) goto stuff;
+            tmpMem = (char *)realloc(fp->s,(size_t)fp->limit);
+            if (tmpMem != NULL) {
+                fp->s = tmpMem;
+                goto stuff;
             }
-        if (fp->alloc)
+        }
+        if (fp->s)
             free(fp->s);
         fp->s = 0;
         fp->fail = 1;
@@ -1253,6 +1257,11 @@ static void writeAttrValue(OFile *fp, VObject *o)
 
 static void writeGroup(OFile *fp, VObject *o)
 {
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#endif
+
     char buf1[256];
     char buf2[256];
     strncpy(buf1,NAME_OF(o),sizeof(buf1)-1);
@@ -1266,6 +1275,10 @@ static void writeGroup(OFile *fp, VObject *o)
         strcpy(buf1,buf2);
         }
     appendsOFile(fp,buf1);
+
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 }
 
 static int inList(const char **list, const char *s)

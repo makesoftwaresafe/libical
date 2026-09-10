@@ -170,7 +170,7 @@ static void icaltimezone_parse_zone_tab(void);
 static char *icaltimezone_load_get_line_fn(char *s, size_t size, void *data);
 
 static void format_utc_offset(int utc_offset, char *buffer, size_t buffer_size);
-static const char *get_zone_directory(void);
+static const char *get_zone_directory_builtin(void);
 
 static void icaltimezone_builtin_lock(void)
 {
@@ -1412,7 +1412,6 @@ static struct icaltimetype tm_to_icaltimetype(struct tm *tm)
 
     memset(&itt, 0, sizeof(struct icaltimetype));
 
-    /* cppcheck-suppress ctuuninitvar */
     itt.second = tm->tm_sec;
     itt.minute = tm->tm_min;
     itt.hour = tm->tm_hour;
@@ -1433,6 +1432,7 @@ static int get_offset(icaltimezone *zone)
     int offset;
     const time_t now = time(NULL);
 
+    memset(&local, 0, sizeof(struct tm));
     if (!gmtime_r(&now, &local))
         return 0;
 
@@ -1566,23 +1566,38 @@ static void icaltimezone_init_builtin_timezones(void)
 
 static int parse_coord(char *coord, int len, int *degrees, int *minutes, int *seconds)
 {
+    *degrees = 0;
+    *minutes = 0;
+    *seconds = 0;
+
+    int fail = 1;
     if (len == 5) {
-        sscanf(coord + 1, "%2d%2d", degrees, minutes);
+        if (sscanf(coord + 1, "%2d%2d", degrees, minutes) == 2) {
+            fail = 0;
+        }
     } else if (len == 6) {
-        sscanf(coord + 1, "%3d%2d", degrees, minutes);
+        if (sscanf(coord + 1, "%3d%2d", degrees, minutes) == 2) {
+            fail = 0;
+        }
     } else if (len == 7) {
-        sscanf(coord + 1, "%2d%2d%2d", degrees, minutes, seconds);
+        if (sscanf(coord + 1, "%2d%2d%2d", degrees, minutes, seconds) == 3) {
+            fail = 0;
+        }
     } else if (len == 8) {
-        sscanf(coord + 1, "%3d%2d%2d", degrees, minutes, seconds);
-    } else {
-        fprintf(stderr, "Invalid coordinate: %s\n", coord);
-        return 1;
+        if (sscanf(coord + 1, "%3d%2d%2d", degrees, minutes, seconds) == 3) {
+            fail = 0;
+        }
     }
 
-    if (coord[0] == '-')
-        *degrees = -*degrees;
+    if (fail == 1) {
+        fprintf(stderr, "Invalid coordinate: %s\n", coord);
+    } else {
+        if (coord[0] == '-') {
+            *degrees = -*degrees;
+        }
+    }
 
-    return 0;
+    return fail;
 }
 
 static int fetch_lat_long_from_string(const char *str,
@@ -1627,7 +1642,7 @@ static int fetch_lat_long_from_string(const char *str,
             sptr++;
         }
         loc = ++sptr;
-        while (!isspace(*sptr) && (*sptr != '\0')) {
+        while (!isspace((int)*sptr) && (*sptr != '\0')) {
             sptr++;
         }
         len = (ptrdiff_t)(sptr - loc);
@@ -1686,7 +1701,7 @@ static void icaltimezone_parse_zone_tab(void)
         zonedir = icaltzutil_get_zone_directory();
         zonetab = ZONES_TAB_SYSTEM_FILENAME;
     } else {
-        zonedir = get_zone_directory();
+        zonedir = get_zone_directory_builtin();
         zonetab = ZONES_TAB_FILENAME;
     }
 
@@ -1723,12 +1738,16 @@ static void icaltimezone_parse_zone_tab(void)
         if (*buf == '#')
             continue;
 
+        latitude_degrees = 360;
+        longitude_degrees = 360;
+        latitude_minutes = 0;
+        longitude_minutes = 0;
+        latitude_seconds = 0;
+        longitude_seconds = 0;
+
         if (use_builtin_tzdata) {
             /* The format of each line is: "[ latitude longitude ] location". */
             if (buf[0] != '+' && buf[0] != '-') {
-                latitude_degrees = longitude_degrees = 360;
-                latitude_minutes = longitude_minutes = 0;
-                latitude_seconds = longitude_seconds = 0;
                 if (sscanf(buf, "%1000s", location) != 1) {     /*limit location to 1000chars */
                     /*increase as needed */
                     /*see location and buf declarations */
@@ -1837,7 +1856,7 @@ static void icaltimezone_load_builtin_timezone(icaltimezone *zone)
         FILE *fp;
         icalparser *parser;
 
-        filename_len = strlen(get_zone_directory()) + strlen(zone->location) + 6;
+        filename_len = strlen(get_zone_directory_builtin()) + strlen(zone->location) + 6;
 
         filename = (char *)malloc(filename_len);
         if (!filename) {
@@ -1845,7 +1864,7 @@ static void icaltimezone_load_builtin_timezone(icaltimezone *zone)
             goto out;
         }
 
-        snprintf(filename, filename_len, "%s/%s.ics", get_zone_directory(), zone->location);
+        snprintf(filename, filename_len, "%s/%s.ics", get_zone_directory_builtin(), zone->location);
 
         fp = fopen(filename, "r");
         free(filename);
@@ -2006,15 +2025,21 @@ static void format_utc_offset(int utc_offset, char *buffer, size_t buffer_size)
         fprintf(stderr, "Warning: Strange timezone offset: H:%i M:%i S:%i\n",
                 hours, minutes, seconds);
     }
-
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
     if (seconds == 0) {
         snprintf(buffer, buffer_size, "%s%02i%02i", sign, hours, minutes);
     } else {
         snprintf(buffer, buffer_size, "%s%02i%02i%02i", sign, hours, minutes, seconds);
     }
 }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
-static const char *get_zone_directory(void)
+static const char *get_zone_directory_builtin(void)
 {
 #if !defined(_WIN32)
     return zone_files_directory == NULL ? ZONEINFO_DIRECTORY : zone_files_directory;
@@ -2147,6 +2172,15 @@ static const char *get_zone_directory(void)
 #endif
     return ZONEINFO_DIRECTORY;
 #endif
+}
+
+const char *get_zone_directory(void)
+{
+    if (use_builtin_tzdata) {
+        return get_zone_directory_builtin();
+    } else {
+        return icaltzutil_get_zone_directory();
+    }
 }
 
 void set_zone_directory(const char *path)
@@ -2382,7 +2416,7 @@ void icaltimezone_truncate_vtimezone(icalcomponent *vtz,
 
                 ritr = icalrecur_iterator_new(rrule, dtstart);
 
-                if (trunc_dtstart) {
+                if (ritr && trunc_dtstart) {
                     /* Bump RRULE start to 1 year prior to our window open */
                     icaltimetype newstart = dtstart;
                     newstart.year  = start.year - 1;
@@ -2499,7 +2533,6 @@ void icaltimezone_truncate_vtimezone(icalcomponent *vtz,
                             newstart.year  = end.year - 1;
                             newstart.month = end.month;
                             newstart.day   = end.day;
-                            (void)icaltime_normalize(newstart);
                             icalrecur_iterator_set_start(ritr, newstart);
                         }
                     }

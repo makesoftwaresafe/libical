@@ -198,6 +198,9 @@ LIBICAL_ICAL_EXPORT struct icaltimetype icaltime_from_day_of_year(const int doy,
  * This function probably won't do what you expect.  In particular, you should
  * only pass an icaltime in UTC, since no conversion is done.  Even in that case,
  * it's probably better to just use icaltime_as_timet_with_zone().
+ *
+ * The return value is defined for dates ranging from 1902-01-01 (incl.) up to 10000-01-01 (excl.)
+ * if time_t has a size of 64 bit and up to 2038-01-18 (excl.) if it has a size of 32 bit.
  */
 LIBICAL_ICAL_EXPORT time_t icaltime_as_timet(const struct icaltimetype);
 
@@ -213,7 +216,7 @@ LIBICAL_ICAL_EXPORT time_t icaltime_as_timet_with_zone(const struct icaltimetype
                                                        const icaltimezone *zone);
 
 /**
- * @brief Returns a string represention of the time, in RFC5545 format.
+ * @brief Returns a string representation of the time, in RFC5545 format.
  *
  * @par Ownership
  * The created string is owned by libical.
@@ -221,7 +224,7 @@ LIBICAL_ICAL_EXPORT time_t icaltime_as_timet_with_zone(const struct icaltimetype
 LIBICAL_ICAL_EXPORT const char *icaltime_as_ical_string(const struct icaltimetype tt);
 
 /**
- * @brief Returns a string represention of the time, in RFC5545 format.
+ * @brief Returns a string representation of the time, in RFC5545 format.
  *
  * @par Ownership
  * The string is owned by the caller.
@@ -352,7 +355,7 @@ LIBICAL_ICAL_EXPORT void icaltime_adjust(struct icaltimetype *tt,
  *      to do arithmetic on times without worrying about overflow or
  *      underflow.
  */
-LIBICAL_ICAL_EXPORT struct icaltimetype icaltime_normalize(const struct icaltimetype t);
+LIBICAL_ICAL_EXPORT struct icaltimetype icaltime_normalize(const struct icaltimetype tt);
 
 /**     @brief Converts time to a given timezone.
  *
@@ -363,7 +366,7 @@ LIBICAL_ICAL_EXPORT struct icaltimetype icaltime_normalize(const struct icaltime
  *
  *      If it's a floating time, the returned object
  *      represents the same time relative to @p zone.
- *      For example, if @tt represents 9:30 AM floating and @p zone
+ *      For example, if @p tt represents 9:30 AM floating and @p zone
  *      is the GMT timezone, the returned object will represent 9:30 AM GMT.
  *
  *      Otherwise, the time will be converted to @p zone, and its timezone

@@ -258,10 +258,16 @@ static char *icalmemory_strdup_and_dequote(const char *str)
  */
 static char *icalmemory_strdup_and_quote(const icalvalue *value, const char *unquoted_str)
 {
+    /* oss-fuzz sets the cpu timeout at 60 seconds.
+     * In order to meet that requirement we'd need to set MAX_ITERATIONS to (1024 * 128) approximately.
+     * We don't feel safe setting MAX_ITERATIONS that low.
+     */
+    static const size_t MAX_ITERATIONS = (1024 * 1024 * 10);
     char *str;
     char *str_p;
     const char *p;
     size_t buf_sz;
+    size_t cnt = 0; //track iterations
 
     buf_sz = strlen(unquoted_str) + 1;
 
@@ -271,8 +277,7 @@ static char *icalmemory_strdup_and_quote(const icalvalue *value, const char *unq
         return 0;
     }
 
-    for (p = unquoted_str; *p != 0; p++) {
-
+    for (p = unquoted_str; *p != 0 && cnt < MAX_ITERATIONS; p++, cnt++) {
         switch (*p) {
         case '\n':{
                 icalmemory_append_string(&str, &str_p, &buf_sz, "\\n");
@@ -306,7 +311,9 @@ static char *icalmemory_strdup_and_quote(const icalvalue *value, const char *unq
                https://tools.ietf.org/html/rfc5545#section-3.8.1.2 */
             if ((icalproperty_isa(value->parent) == ICAL_CATEGORIES_PROPERTY) ||
                 (icalproperty_isa(value->parent) == ICAL_RESOURCES_PROPERTY) ||
-                (icalproperty_isa(value->parent) == ICAL_POLLPROPERTIES_PROPERTY)) {
+                (icalproperty_isa(value->parent) == ICAL_POLLPROPERTIES_PROPERTY) ||
+                ((icalproperty_isa(value->parent) == ICAL_X_PROPERTY) &&
+                 icalvalue_isa(value) != ICAL_TEXT_VALUE)) {
                 icalmemory_append_char(&str, &str_p, &buf_sz, *p);
                 break;
             }
@@ -485,7 +492,7 @@ static icalvalue *icalvalue_new_from_string_with_error(icalvalue_kind kind,
                          "Could not parse %s as a %s property",
                          str, icalvalue_kind_to_string(kind));
                 errParam = icalparameter_new_xlicerrortype(ICAL_XLICERRORTYPE_VALUEPARSEERROR);
-                *error = icalproperty_vanew_xlicerror(temp, errParam, 0);
+                *error = icalproperty_vanew_xlicerror(temp, errParam, (void *)0);
                 icalparameter_free(errParam);
             }
             break;
@@ -621,7 +628,7 @@ static icalvalue *icalvalue_new_from_string_with_error(icalvalue_kind kind,
                          "Could not parse %s as a %s property",
                          str, icalvalue_kind_to_string(kind));
                 errParam = icalparameter_new_xlicerrortype(ICAL_XLICERRORTYPE_VALUEPARSEERROR);
-                *error = icalproperty_vanew_xlicerror(temp, errParam, 0);
+                *error = icalproperty_vanew_xlicerror(temp, errParam, (void *)0);
                 icalparameter_free(errParam);
             }
         }
@@ -736,7 +743,7 @@ static icalvalue *icalvalue_new_from_string_with_error(icalvalue_kind kind,
                 snprintf(temp, TMP_BUF_SIZE, "Unknown type for \'%s\'", str);
 
                 errParam = icalparameter_new_xlicerrortype(ICAL_XLICERRORTYPE_VALUEPARSEERROR);
-                *error = icalproperty_vanew_xlicerror(temp, errParam, 0);
+                *error = icalproperty_vanew_xlicerror(temp, errParam, (void *)0);
                 icalparameter_free(errParam);
             }
 
@@ -755,7 +762,7 @@ static icalvalue *icalvalue_new_from_string_with_error(icalvalue_kind kind,
         snprintf(temp, TMP_BUF_SIZE, "Failed to parse value: \'%s\'", str);
 
         errParam = icalparameter_new_xlicerrortype(ICAL_XLICERRORTYPE_VALUEPARSEERROR);
-        *error = icalproperty_vanew_xlicerror(temp, errParam, 0);
+        *error = icalproperty_vanew_xlicerror(temp, errParam, (void *)0);
         icalparameter_free(errParam);
     }
 
@@ -899,10 +906,13 @@ static char *icalvalue_utcoffset_as_ical_string_r(const icalvalue *value)
     m = (data - (h * 3600)) / 60;
     s = (data - (h * 3600) - (m * 60));
 
+    h = MIN(abs(h), 23);
+    m = MIN(abs(m), 59);
+    s = MIN(abs(s), 59);
     if (s != 0) {
-        snprintf(str, 9, "%c%02d%02d%02d", sign, abs(h), abs(m), abs(s));
+        snprintf(str, 9, "%c%02d%02d%02d", sign, h, m, s);
     } else {
-        snprintf(str, 9, "%c%02d%02d", sign, abs(h), abs(m));
+        snprintf(str, 9, "%c%02d%02d", sign, h, m);
     }
 
     return str;
@@ -975,10 +985,13 @@ static void print_time_to_string(char *str, const struct icaltimetype *data)
 {       /* this function is a candidate for a library-wide external function
            except it isn't used any place outside of icalvalue.c.
            see print_date_to_string() and print_datetime_to_string in icalvalue.h */
-    char temp[20];
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#endif
+    char temp[8];
 
     str[0] = '\0';
-
     if (data != 0) {
         if (icaltime_is_utc(*data)) {
             snprintf(temp, sizeof(temp), "%02d%02d%02dZ", data->hour, data->minute, data->second);
@@ -988,11 +1001,18 @@ static void print_time_to_string(char *str, const struct icaltimetype *data)
             strncat(str, temp, 6);
         }
     }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 }
 
 void print_date_to_string(char *str, const struct icaltimetype *data)
 {
-    char temp[20];
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#endif
+    char temp[9];
 
     str[0] = '\0';
 
@@ -1000,6 +1020,9 @@ void print_date_to_string(char *str, const struct icaltimetype *data)
         snprintf(temp, sizeof(temp), "%04d%02d%02d", data->year, data->month, data->day);
         strncat(str, temp, 8);
     }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 }
 
 static char *icalvalue_date_as_ical_string_r(const icalvalue *value)
@@ -1020,10 +1043,13 @@ static char *icalvalue_date_as_ical_string_r(const icalvalue *value)
 
 void print_datetime_to_string(char *str, const struct icaltimetype *data)
 {
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-truncation"
+#endif
     char temp[20];
 
     str[0] = '\0';
-
     if (data != 0) {
         print_date_to_string(str, data);
         if (!data->is_date) {
@@ -1033,6 +1059,9 @@ void print_datetime_to_string(char *str, const struct icaltimetype *data)
             strncat(str, temp, 19);
         }
     }
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 }
 
 static char *icalvalue_datetime_as_ical_string_r(const icalvalue *value)

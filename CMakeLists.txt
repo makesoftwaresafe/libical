@@ -66,8 +66,16 @@
 #  Set to build the test suite
 #  Default=true
 #
+# -DLIBICAL_BUILD_EXAMPLES=[true|false]
+#  Set to build the examples
+#  Default=true
+#
 
 ## Special CMake Options for Developers
+#
+# -DLIBICAL_BUILD_TESTING_BIGFUZZ=[true|false]
+#  Set to build the big fuzzer tests
+#  Default=false
 #
 # -DABI_DUMPER=[true|false]
 #  Build for the abi-dumper (requires gcc)
@@ -80,7 +88,7 @@
 #  Build with the thread sanitizer (requires gcc or clang)
 #
 
-cmake_minimum_required(VERSION 3.1.0) #first line, to shutup a cygwin warning
+cmake_minimum_required(VERSION 3.5.0) #first line, to shutup a cygwin warning
 project(libical C) #CXX is optional for the bindings
 
 cmake_policy(SET CMP0003 NEW)
@@ -112,7 +120,7 @@ endif()
 
 set(LIBICAL_LIB_MAJOR_VERSION "3")
 set(LIBICAL_LIB_MINOR_VERSION "0")
-set(LIBICAL_LIB_PATCH_VERSION "15")
+set(LIBICAL_LIB_PATCH_VERSION "21")
 set(LIBICAL_LIB_VERSION_STRING
   "${LIBICAL_LIB_MAJOR_VERSION}.${LIBICAL_LIB_MINOR_VERSION}.${LIBICAL_LIB_PATCH_VERSION}"
 )
@@ -195,17 +203,15 @@ endif()
 
 # libicu is highly recommended for RSCALE support
 #  libicu can be found at http://www.icu-project.org
-#  RSCALE info at https://tools.ietf.org/html/rfc7529
-if(NOT "$ENV{ICU_BASE}" STREQUAL "") #support the old ICU_BASE env
+#  RSCALE info at http://tools.ietf.org/html/rfc7529
+if(DEFINED ENV{ICU_BASE}) # keep backwards compatibility for ICU_BASE
   set(ICU_ROOT $ENV{ICU_BASE})
 endif()
-if(NOT "$ENV{ICU_ROOT}")
+if(NOT DEFINED ENV{ICU_ROOT} AND APPLE)
   #Use the homebrew version. MacOS provided ICU doesn't provide development files
-  if(APPLE)
-    set(ICU_ROOT "/usr/local/opt/icu4c")
-  endif()
+  set(ICU_ROOT "/usr/local/opt/icu4c")
 endif()
-find_package(ICU COMPONENTS uc i18n)
+find_package(ICU COMPONENTS uc i18n data)
 set_package_properties(ICU PROPERTIES
   TYPE RECOMMENDED
   PURPOSE "For RSCALE (RFC7529) support"
@@ -295,13 +301,13 @@ set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR} CACHE STRING "Include direct
 set(SHARE_INSTALL_DIR ${CMAKE_INSTALL_DATAROOTDIR} CACHE STRING "Share directory name")
 
 # set the output paths
-set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 if(WIN32)
   set(LIBRARY_OUTPUT_PATH ${EXECUTABLE_OUTPUT_PATH})
   set(LIB_INSTALL_DIR lib)
   set(BIN_INSTALL_DIR bin)
 else()
-  set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
+  set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 endif()
 
 if(APPLE)
@@ -357,6 +363,10 @@ endif()
 include(ConfigureChecks.cmake)
 add_definitions(-DHAVE_CONFIG_H)
 configure_file(config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
+
+if(NDEBUG)
+  add_definitions(-DNDEBUG)
+endif()
 
 set(INSTALL_TARGETS_DEFAULT_ARGS
   RUNTIME DESTINATION ${BIN_INSTALL_DIR}
@@ -498,6 +508,9 @@ if(ICAL_GLIB)
       "(glib ${MIN_GLIB} and libxml ${MIN_LIBXML} or higher are required). "
       "Alternatively, disable the libical-glib build (by passing -DICAL_GLIB=False to cmake).")
   endif()
+else()
+  #to quiet a warning about unused manually-specified variables
+  set(ENABLE_GTK_DOC False)
 endif()
 
 #
@@ -510,7 +523,11 @@ if(CMAKE_COMPILER_IS_GNUCC OR "${CMAKE_C_COMPILER_ID}" MATCHES "Clang")
   check_c_compiler_flag(-Wsizeof-pointer-memaccess HAVE_GCC_POINTER_MEMACCESS)
   check_c_compiler_flag(-Wformat-security HAVE_GCC_FORMAT_SECURITY)
   check_c_compiler_flag(-Wredundant-decls HAVE_GCC_REDUNDANT_DECLS)
+  check_c_compiler_flag(-Wunreachable-code HAVE_GCC_UNREACHABLE_CODE)
+  check_c_compiler_flag(-Wvarargs HAVE_GCC_VARARGS)
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fvisibility=hidden -Wno-deprecated -Wall -Wno-unknown-pragmas -Wextra -Winit-self -Wunused -Wno-div-by-zero -Wundef -Wpointer-arith -Wtype-limits -Wwrite-strings -Werror=return-type")
+  #for more modern C
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wold-style-definition -Wstrict-prototypes")
   if(HAVE_GCC_UNUSED_BUT_SET)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-variable")
   endif()
@@ -526,6 +543,12 @@ if(CMAKE_COMPILER_IS_GNUCC OR "${CMAKE_C_COMPILER_ID}" MATCHES "Clang")
   if(HAVE_GCC_REDUNDANT_DECLS)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wredundant-decls")
   endif()
+  if(HAVE_GCC_UNREACHABLE_CODE)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunreachable-code")
+  endif()
+  if(HAVE_GCC_VARARGS)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wvarargs")
+  endif()
   if(CMAKE_SYSTEM_NAME MATCHES Linux OR CMAKE_SYSTEM_NAME STREQUAL GNU)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_XOPEN_SOURCE=500 -D_DEFAULT_SOURCE -D_GNU_SOURCE")
   endif()
@@ -533,6 +556,8 @@ endif()
 if("${CMAKE_C_COMPILER_ID}" MATCHES "Clang")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Qunused-arguments")
 endif()
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   include(CheckCXXCompilerFlag)
@@ -542,6 +567,8 @@ if(CMAKE_COMPILER_IS_GNUCXX OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   check_cxx_compiler_flag(-Wreorder HAVE_GXX_REORDER)
   check_cxx_compiler_flag(-Wformat-security HAVE_GXX_FORMAT_SECURITY)
   check_cxx_compiler_flag(-Wredundant-decls HAVE_GXX_REDUNDANT_DECLS)
+  check_cxx_compiler_flag(-Wunreachable-code HAVE_GXX_UNREACHABLE_CODE)
+  check_cxx_compiler_flag(-Wvarargs HAVE_GXX_VARARGS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden -Weffc++ -Wno-deprecated -Wall -Wextra -Woverloaded-virtual -Winit-self -Wunused -Wno-div-by-zero -Wundef -Wpointer-arith -Wtype-limits -Wwrite-strings -Werror=return-type")
   if(HAVE_GXX_UNUSED_BUT_SET)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunused-but-set-variable")
@@ -561,6 +588,12 @@ if(CMAKE_COMPILER_IS_GNUCXX OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   if(HAVE_GXX_REDUNDANT_DECLS)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wredundant-decls")
   endif()
+  if(HAVE_GXX_UNREACHABLE_CODE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wunreachable-code")
+  endif()
+  if(HAVE_GXX_VARARGS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wvarargs")
+  endif()
   if(CMAKE_SYSTEM_NAME MATCHES Linux OR CMAKE_SYSTEM_NAME STREQUAL GNU)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_XOPEN_SOURCE=500 -D_DEFAULT_SOURCE -D_GNU_SOURCE")
   endif()
@@ -568,6 +601,8 @@ endif()
 if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Qunused-arguments")
 endif()
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ################ Developer Options #####################
 option(ABI_DUMPER "(Developer-only) Build for abi-dumper." False)
@@ -652,7 +687,9 @@ add_subdirectory(design-data)
 add_subdirectory(scripts)
 add_subdirectory(test-data)
 add_subdirectory(src)
-add_subdirectory(examples)
+if(LIBICAL_BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()
 if(USE_BUILTIN_TZDATA)
   # use our zoneinfo if cmake is passed -DUSE_BUILTIN_TZDATA
   add_subdirectory(zoneinfo)

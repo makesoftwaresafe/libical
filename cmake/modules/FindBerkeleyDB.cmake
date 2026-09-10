@@ -61,15 +61,17 @@ elseif(CMAKE_SYSTEM_NAME MATCHES ".*[wW]indows.*")
 		)
 	endforeach()
 else()
-	# Paths for anything other than Windows
-	# Cellar/berkeley-db is for macOS from homebrew installation
-	list(APPEND _BERKELEYDB_PATHS
-		"/usr"
-		"/usr/local"
-		"/usr/local/Cellar/berkeley-db"
-		"/opt"
-		"/opt/local"
-	)
+  # Paths for anything other than Windows
+  # /usr/local/opt/berkeley-db is for macOS from homebrew installation
+  list(
+    APPEND
+    _BERKELEYDB_PATHS
+    "/usr"
+    "/usr/local"
+    "/usr/local/opt/berkeley-db"
+    "/opt"
+    "/opt/local"
+  )
 endif()
 
 # Find includes path
@@ -92,8 +94,8 @@ else()
 	if(BerkeleyDB_FIND_REQUIRED)
 		# If the find_package(BerkeleyDB REQUIRED) was used, fail since we couldn't find the header
 		message(FATAL_ERROR "Failed to find Berkeley DB's header file \"db.h\"! Try setting \"BerkeleyDB_ROOT_DIR\" when initiating Cmake.")
-	elseif(NOT BerkeleyDB_FIND_QUIETLY)
-		message(WARNING "Failed to find Berkeley DB's header file \"db.h\"! Try setting \"BerkeleyDB_ROOT_DIR\" when initiating Cmake.")
+	#elseif(NOT BerkeleyDB_FIND_QUIETLY)
+	#	message(WARNING "Failed to find Berkeley DB's header file \"db.h\"! Try setting \"BerkeleyDB_ROOT_DIR\" when initiating Cmake.")
 	endif()
 	# Set some garbage values to the versions since we didn't find a file to read
 	set(BerkeleyDB_VERSION_MAJOR "0")

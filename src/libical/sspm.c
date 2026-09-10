@@ -146,7 +146,7 @@ static char *sspm_get_parameter(const char *line, const char *parameter)
     static char name[1024];
 
     /* Find where the parameter name is in the line */
-    p = strstr(line, parameter);
+    p = (char *)strstr(line, parameter);
 
     if (p == 0) {
         return 0;
@@ -192,7 +192,7 @@ static char *sspm_get_parameter(const char *line, const char *parameter)
 static char *sspm_property_name(const char *line)
 {
     static char name[1024];
-    char *c = strchr(line, ':');
+    char *c = (char *)strchr(line, ':');
 
     if (c != 0) {
         strncpy(name, line, (size_t) c - (size_t) line);
@@ -868,7 +868,7 @@ static void *sspm_make_multipart_subpart(struct mime_impl *impl, struct sspm_hea
         /* Error. Multipart headers must have a boundary */
 
         sspm_set_error(parent_header, SSPM_NO_BOUNDARY_ERROR, 0);
-        /* read all of the reamining lines */
+        /* read all of the remaining lines */
         while (sspm_get_next_line(impl) != 0) {
         }
 
@@ -1206,7 +1206,7 @@ static void sspm_append_hex(struct sspm_buffer *buf, char ch)
 {
     char tmp[4];
 
-    snprintf(tmp, sizeof(tmp), "=%02X", (unsigned int)ch);
+    snprintf(tmp, sizeof(tmp), "=%02X", (unsigned char)ch);
 
     sspm_append_string(buf, tmp);
 }

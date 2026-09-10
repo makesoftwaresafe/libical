@@ -183,8 +183,8 @@ char *make_mime(const char *to, const char *from, const char *subject,
     uname(&uts);
 
     srand((unsigned int)(time(0) << getpid()));
-    snprintf(content_id, TMPSIZE_SMALL, "%d-%d@%s", (int)time(0), rand(), uts.nodename);
-    snprintf(boundary, TMPSIZE_SMALL, "%d-%d-%s", (int)time(0), rand(), uts.nodename);
+    snprintf(content_id, TMPSIZE_SMALL, "%ld-%d@%s", (long)time(0), rand(), uts.nodename);
+    snprintf(boundary, TMPSIZE_SMALL, "%ld-%d-%s", (long)time(0), rand(), uts.nodename);
 //krazy:cond=style
     snprintf(mime_part_1, TMPSIZE, "Content-ID: %s\n\
 Content-type: text/plain\n\
@@ -310,8 +310,8 @@ icalcomponent *make_reply(icalcomponent *comp, icalproperty *return_status,
                 icalproperty_new_clone(
                     icalcomponent_get_first_property(inner, ICAL_UID_PROPERTY)),
                 icalproperty_new_attendee(attendee),
-                0),
-            0);
+                (void *)0),
+            (void *)0);
 
     /* Convert errors into request-status properties and transfers
        them to the reply component */
@@ -602,7 +602,7 @@ void get_options(int argc, char *argv[], struct options_struct *opt)
         }
 
         /* Find password entry for user */
-        while ((pw = getpwent()) != 0) {
+        while ((pw = getpwent()) != 0) { /* cppcheck-suppress getpwentCalled */
             if (strcmp(user, pw->pw_name) == 0) {
                 break;
             }

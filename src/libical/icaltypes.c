@@ -29,6 +29,7 @@
 #include <pthread.h>
 static pthread_mutex_t unk_token_mutex = PTHREAD_MUTEX_INITIALIZER;
 #endif
+#include <ctype.h>
 
 static ical_unknown_token_handling unknownTokenHandling = ICAL_TREAT_AS_ERROR;
 
@@ -101,7 +102,7 @@ struct icaltriggertype icaltriggertype_from_string(const char *str)
 
 struct icalreqstattype icalreqstattype_from_string(const char *str)
 {
-    const char *p1, *p2;
+    const char *s, *p1, *p2;
     struct icalreqstattype stat;
     short major = 0, minor = 0;
 
@@ -110,6 +111,16 @@ struct icalreqstattype icalreqstattype_from_string(const char *str)
     stat.code = ICAL_UNKNOWN_STATUS;
     stat.debug = 0;
     stat.desc = 0;
+
+    // Don't allow (fuzzer) garbage chars anywhere in the reqstat string
+    s = str;
+    while (*s && isprint((unsigned char)*s)) {
+        ++s;
+    }
+    if (*s != '\0') {
+        // garbage encountered. return the empty stat
+        return stat;
+    }
 
     /* Get the status numbers */
 
@@ -138,7 +149,7 @@ struct icalreqstattype icalreqstattype_from_string(const char *str)
      */
 
     p2 = strchr(p1 + 1, ';');
-    if (p2 != 0 && *p2 != 0) {
+    if (p2 != 0 && *(p2 + 1) != 0) { // skipping empty debug strings
         stat.debug = icalmemory_tmp_copy(p2 + 1);
     }
 
@@ -169,7 +180,6 @@ char *icalreqstattype_as_string_r(struct icalreqstattype stat)
     if (stat.debug != 0) {
         snprintf(temp, TMP_BUF_SIZE, "%d.%d;%s;%s", icalenum_reqstat_major(stat.code),
                  icalenum_reqstat_minor(stat.code), stat.desc, stat.debug);
-
     } else {
         snprintf(temp, TMP_BUF_SIZE, "%d.%d;%s", icalenum_reqstat_major(stat.code),
                  icalenum_reqstat_minor(stat.code), stat.desc);

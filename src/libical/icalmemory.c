@@ -224,7 +224,7 @@ void *icalmemory_tmp_buffer(size_t size)
     return buf;
 }
 
-void icalmemory_free_ring()
+void icalmemory_free_ring(void)
 {
     buffer_ring *br;
 
@@ -241,7 +241,15 @@ void icalmemory_free_ring()
 /* Like strdup, but the buffer is on the ring. */
 char *icalmemory_tmp_copy(const char *str)
 {
-    char *b = icalmemory_tmp_buffer(strlen(str) + 1);
+    char *b;
+
+    if (!str || str[0] == '\0')
+        return NULL;
+
+    b = icalmemory_tmp_buffer(strlen(str) + 1);
+
+    if (!b)
+        return NULL;
 
     strcpy(b, str);
 
